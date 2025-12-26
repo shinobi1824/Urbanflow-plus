@@ -86,6 +86,9 @@ export interface UserProfile {
   initials: string;
   points?: number;
   level?: number;
+  // Added fields to support ImpactCenter usage
+  levelTitle?: string;
+  treesPlanted?: number;
 }
 
 export interface AppState {

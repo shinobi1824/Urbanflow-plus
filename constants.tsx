@@ -29,8 +29,10 @@ export const I18N = {
     cheapest: "Cheapest",
     lessWalking: "Less walking",
     suggestedRoutes: "Suggested routes",
+    premium: "Premium",
     premiumBannerTitle: "UrbanFlow+ Premium",
     premiumBannerSubtitle: "Plan your day without stress",
+    premiumSubtitle: "Plan your day without stress",
     premiumCTA: "Start 7-day free trial",
     cancelAnytime: "Cancel anytime • No commitment",
     quickRoute: "Quick route",
@@ -65,7 +67,10 @@ export const I18N = {
     social: "Community",
     cityFeed: "City Wall",
     friends: "Friends",
-    shareLive: "Share Live Trip"
+    shareLive: "Share Live Trip",
+    smartSchedule: "Smart Schedule",
+    exitNow: "Leave Now",
+    heatmap: "Traffic Heatmap"
   },
   es: {
     welcome: "¿A dónde vas?",
@@ -82,8 +87,10 @@ export const I18N = {
     cheapest: "Más barato",
     lessWalking: "Menos caminata",
     suggestedRoutes: "Rutas sugeridas",
+    premium: "Premium",
     premiumBannerTitle: "UrbanFlow+ Premium",
     premiumBannerSubtitle: "Planifica tu día sin estrés",
+    premiumSubtitle: "Planifica tu día sin estrés",
     premiumCTA: "Prueba gratis 7 días",
     cancelAnytime: "Cancela cuando quieras • Sin compromiso",
     quickRoute: "Ruta rápida",
@@ -118,7 +125,10 @@ export const I18N = {
     social: "Comunidad",
     cityFeed: "Muro de la Ciudad",
     friends: "Amigos",
-    shareLive: "Compartir Viaje"
+    shareLive: "Compartir Viaje",
+    smartSchedule: "Horario Inteligente",
+    exitNow: "Salir Ahora",
+    heatmap: "Mapa de Calor"
   },
   pt: {
     welcome: "Para onde você vai?",
@@ -135,8 +145,10 @@ export const I18N = {
     cheapest: "Mais barato",
     lessWalking: "Menos caminhada",
     suggestedRoutes: "Rotas sugeridas",
+    premium: "Premium",
     premiumBannerTitle: "UrbanFlow+ Premium",
     premiumBannerSubtitle: "Planeje seu dia sem estresse",
+    premiumSubtitle: "Planeje seu dia sem estresse",
     premiumCTA: "Teste grátis por 7 dias",
     cancelAnytime: "Cancele quando quiser • Sem compromisso",
     quickRoute: "Rota rápida",
@@ -171,7 +183,10 @@ export const I18N = {
     social: "Comunidade",
     cityFeed: "Mural da Cidade",
     friends: "Amigos",
-    shareLive: "Compartilhar Viagem"
+    shareLive: "Compartilhar Viagem",
+    smartSchedule: "Agenda Inteligente",
+    exitNow: "Sair Agora",
+    heatmap: "Mapa de Calor"
   }
 };
 

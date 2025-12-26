@@ -60,9 +60,9 @@ const App: React.FC = () => {
       ],
       weather: { temp: 22, condition: 'Rainy' },
       socialFeed: [
-        { id: 'p1', userName: 'Mateo_Flow', userAvatar: 'M', type: 'alert', content: 'Metro L8 parado en estación Central. Mejor tomen el Bus 21.', likes: 12, lineContext: 'Metro L8' },
-        { id: 'p2', userName: 'SaraUrbana', userAvatar: 'S', type: 'vibe', content: 'Hoy el TransMilenio va vacío y con música chill. ¡Buen viernes!', likes: 45, lineContext: 'TM G43' },
-        { id: 'p3', userName: 'BikeLover', userAvatar: 'B', type: 'tip', content: 'Nueva ciclovía habilitada en Calle 100. Muy segura.', likes: 8, lineContext: 'Ciclovía' },
+        { id: 'p1', userName: 'Mateo_Flow', userAvatar: 'M', type: 'alert', content: 'Metro L8 parado en estación Central. Mejor tomen el Bus 21.', likes: 12, lineContext: 'Metro L8', timestamp: Date.now() - 3600000 },
+        { id: 'p2', userName: 'SaraUrbana', userAvatar: 'S', type: 'vibe', content: 'Hoy el TransMilenio va vacío y con música chill. ¡Buen viernes!', likes: 45, lineContext: 'TM G43', timestamp: Date.now() - 7200000 },
+        { id: 'p3', userName: 'BikeLover', userAvatar: 'B', type: 'tip', content: 'Nueva ciclovía habilitada en Calle 100. Muy segura.', likes: 8, lineContext: 'Ciclovía', timestamp: Date.now() - 10800000 },
       ]
     };
   });
@@ -82,7 +82,7 @@ const App: React.FC = () => {
 
   // Listener de Autenticación Firebase Real
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
       if (user) {
         // Usuario logueado: Traer datos de Firestore
         const userProfile = await FirebaseService.syncUserProfile(user);
@@ -96,7 +96,9 @@ const App: React.FC = () => {
               email: user.email || '',
               initials: (user.email?.[0] || 'U').toUpperCase(),
               points: userProfile.points,
-              level: userProfile.level
+              level: userProfile.level,
+              treesPlanted: 0,
+              levelTitle: 'Explorador Urbano'
             }
           },
           user: {

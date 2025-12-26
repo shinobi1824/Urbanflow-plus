@@ -32,11 +32,11 @@ export const db = getFirestore(app);
 
 // Inicializar Analytics de manera segura (asíncrona)
 export let analytics: any = null;
-isSupported().then((supported) => {
+isSupported().then((supported: boolean) => {
   if (supported) {
     analytics = getAnalytics(app);
   }
-}).catch((e) => {
+}).catch((e: any) => {
   console.warn("Analytics not supported in this environment:", e);
 });
 
