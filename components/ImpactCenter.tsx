@@ -35,8 +35,8 @@ const ImpactCenter: React.FC<ImpactCenterProps> = ({ state }) => {
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-1">{profile.name}</h1>
             <div className="flex items-center gap-2">
-              <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{t.level} {profile.level}</span>
-              <span className="text-sm font-bold opacity-40">{profile.levelTitle}</span>
+              <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">{t.level} {profile.level || 1}</span>
+              <span className="text-sm font-bold opacity-40">{profile.levelTitle || 'Explorador'}</span>
             </div>
           </div>
         </div>
@@ -44,11 +44,11 @@ const ImpactCenter: React.FC<ImpactCenterProps> = ({ state }) => {
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-white dark:bg-[#121820] p-6 rounded-[32px] border border-gray-200 dark:border-white/5">
             <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">{t.flowPoints}</p>
-            <div className="text-3xl font-black italic">{profile.points}</div>
+            <div className="text-3xl font-black italic">{profile.points || 0}</div>
           </div>
           <div className="bg-white dark:bg-[#121820] p-6 rounded-[32px] border border-gray-200 dark:border-white/5">
             <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Árboles</p>
-            <div className="text-3xl font-black italic">{profile.treesPlanted}</div>
+            <div className="text-3xl font-black italic">{profile.treesPlanted || 0}</div>
           </div>
         </div>
       </div>
@@ -64,7 +64,7 @@ const ImpactCenter: React.FC<ImpactCenterProps> = ({ state }) => {
             {t.treesDescription}
           </p>
           <div className="flex flex-wrap gap-3">
-            {Array.from({ length: profile.treesPlanted }).map((_, i) => (
+            {Array.from({ length: profile.treesPlanted || 0 }).map((_, i) => (
               <div key={i} className="text-2xl animate-bounce" style={{ animationDelay: `${i * 0.1}s` }}>🌲</div>
             ))}
             <div className="w-10 h-10 border-2 border-dashed border-gray-300 dark:border-white/10 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-300 font-black">
