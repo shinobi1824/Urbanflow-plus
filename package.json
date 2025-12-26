@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && (npx cap add android || echo 'Android platform setup check passed')",
+    "build": "tsc && vite build && (npx cap add android || echo 'Android platform setup check passed') && (sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.5-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties || echo 'No gradle wrapper found to patch')",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
     "android": "npm run build && npx cap run android",
@@ -17,13 +17,13 @@
     "mapbox-gl": "^3.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@capacitor/core": "^5.7.0",
-    "@capacitor/android": "^5.7.0",
-    "@capacitor/ios": "^5.7.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
     "firebase": "^10.8.1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^5.7.0",
+    "@capacitor/cli": "^6.0.0",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@vitejs/plugin-react": "^4.2.1",
