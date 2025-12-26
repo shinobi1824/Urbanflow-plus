@@ -152,4 +152,10 @@ export interface UserPreferences {
   offlineMode: boolean;
   offlineData: any;
   selectedAgencyId?: string;
+  // Profile fields synced from Firestore
+  name?: string;
+  email?: string;
+  points?: number;
+  level?: number;
+  createdAt?: string;
 }

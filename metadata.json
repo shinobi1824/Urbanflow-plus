@@ -2,6 +2,7 @@
   "name": "UrbanFlow+",
   "description": "Next-gen urban mobility platform with AI route optimization, real-time arrivals, and personalized travel analytics.",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "microphone"
   ]
 }

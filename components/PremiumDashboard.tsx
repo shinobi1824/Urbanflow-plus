@@ -6,9 +6,10 @@ import { I18N, Icons } from '../constants';
 interface PremiumDashboardProps {
   user: UserPreferences;
   language: Language;
+  onUpgrade?: () => void;
 }
 
-const PremiumDashboard: React.FC<PremiumDashboardProps> = ({ user, language }) => {
+const PremiumDashboard: React.FC<PremiumDashboardProps> = ({ user, language, onUpgrade }) => {
   const t = I18N[language];
 
   return (
@@ -77,10 +78,17 @@ const PremiumDashboard: React.FC<PremiumDashboardProps> = ({ user, language }) =
         </div>
       </div>
 
-      {!user.isPremium && (
-        <button className="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-3xl font-black shadow-2xl shadow-blue-600/20 uppercase tracking-widest text-sm animate-pulse">
-          Start 14-Day Free Trial
+      {!user.isPremium ? (
+        <button 
+          onClick={onUpgrade}
+          className="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-3xl font-black shadow-2xl shadow-blue-600/20 uppercase tracking-widest text-sm animate-pulse active:scale-95 transition-transform"
+        >
+          {t.premiumCTA}
         </button>
+      ) : (
+         <div className="w-full py-5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 rounded-3xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2">
+            <span>✅</span> Plan Activo
+         </div>
       )}
     </div>
   );

@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { I18N, Icons } from '../constants';
 import { Language, UserProfile } from '../types';
+import { auth } from '../services/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 
 interface LoginProps {
   language: Language;
@@ -11,21 +13,34 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ language, onLogin, onSkip }) => {
   const t = I18N[language];
+  const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleAuth = () => {
+  const handleAuth = async () => {
     setIsLoading(true);
-    // Simulated Auth delay
-    setTimeout(() => {
-      onLogin({
-        name: email.split('@')[0] || "User",
-        email: email,
-        initials: (email[0] || "U").toUpperCase()
-      });
+    setError('');
+    
+    try {
+      if (isRegistering) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        // El listener en App.tsx manejará el cambio de estado
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err: any) {
+      console.error(err);
+      let msg = "Error de autenticación";
+      if (err.code === 'auth/invalid-email') msg = "Email inválido";
+      if (err.code === 'auth/wrong-password') msg = "Contraseña incorrecta";
+      if (err.code === 'auth/user-not-found') msg = "Usuario no encontrado";
+      if (err.code === 'auth/email-already-in-use') msg = "Este email ya está registrado";
+      if (err.code === 'auth/weak-password') msg = "La contraseña es muy débil";
+      setError(msg);
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -39,9 +54,11 @@ const Login: React.FC<LoginProps> = ({ language, onLogin, onSkip }) => {
           <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full border-4 border-gray-50 dark:border-[#0B0F14]"></div>
         </div>
 
-        <h1 className="text-4xl font-black tracking-tighter mb-2 text-center">{t.loginTitle}</h1>
+        <h1 className="text-4xl font-black tracking-tighter mb-2 text-center">
+          {isRegistering ? "Crear Cuenta" : t.loginTitle}
+        </h1>
         <p className="text-base opacity-40 font-medium mb-12 text-center max-w-[280px]">
-          {t.loginSubtitle}
+          {isRegistering ? "Únete a UrbanFlow y domina tu ciudad" : t.loginSubtitle}
         </p>
 
         {/* Form */}
@@ -71,14 +88,24 @@ const Login: React.FC<LoginProps> = ({ language, onLogin, onSkip }) => {
               />
             </div>
           </div>
+          
+          {error && (
+            <div className="text-red-500 text-xs font-bold text-center p-2 bg-red-500/10 rounded-xl">
+              {error}
+            </div>
+          )}
         </div>
 
         <button 
           onClick={handleAuth}
-          disabled={isLoading || !email}
+          disabled={isLoading || !email || !password}
           className="w-full py-5 bg-blue-600 rounded-[28px] font-black text-lg text-white shadow-xl shadow-blue-600/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center"
         >
-          {isLoading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : t.signIn}
+          {isLoading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : (isRegistering ? "Registrarse" : t.signIn)}
+        </button>
+
+        <button onClick={() => { setIsRegistering(!isRegistering); setError(''); }} className="mt-4 text-xs font-bold text-blue-500">
+          {isRegistering ? "¿Ya tienes cuenta? Inicia Sesión" : "¿Nuevo aquí? Regístrate"}
         </button>
 
         <div className="w-full flex items-center gap-4 my-8">

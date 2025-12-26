@@ -2,9 +2,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Language, AppState, UserPreferences, RouteResult, TransportMode, UserProfile, RouteFilter, SocialPost } from './types';
 import { I18N, Icons, COLORS } from './constants';
-import { parseNaturalLanguageQuery, generateMockRoutes } from './services/gemini';
+import { parseNaturalLanguageQuery, generateSmartRoutes, getFallbackRoutes } from './services/gemini';
 import { fetchNearbyAgencies, TransitEvents } from './services/transit';
 import { ExternalServices } from './services/external';
+import { auth, FirebaseService } from './services/firebase'; // Importar Firebase
+import { onAuthStateChanged } from 'firebase/auth';
+
 import RouteList from './components/RouteList';
 import MapPreview from './components/MapPreview';
 import PremiumDashboard from './components/PremiumDashboard';
@@ -16,6 +19,7 @@ import ReportModal from './components/ReportModal';
 import LaunchGuide from './components/LaunchGuide';
 import Onboarding from './components/Onboarding';
 import OfflineManager from './components/OfflineManager';
+import AdBanner from './components/AdBanner';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
@@ -35,6 +39,7 @@ const App: React.FC = () => {
         offlineMode: false,
         offlineData: {},
       },
+      auth: { isLoggedIn: false },
       origin: 'Current Location',
       destination: '',
       searchResults: [],
@@ -75,6 +80,45 @@ const App: React.FC = () => {
     }
   }, [state.user.theme]);
 
+  // Listener de Autenticación Firebase Real
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Usuario logueado: Traer datos de Firestore
+        const userProfile = await FirebaseService.syncUserProfile(user);
+        
+        setState(prev => ({
+          ...prev,
+          auth: { 
+            isLoggedIn: true, 
+            profile: {
+              name: userProfile.name || user.email?.split('@')[0] || 'User',
+              email: user.email || '',
+              initials: (user.email?.[0] || 'U').toUpperCase(),
+              points: userProfile.points,
+              level: userProfile.level
+            }
+          },
+          user: {
+            ...prev.user,
+            isPremium: !!userProfile.isPremium,
+            // Cargar preferencias guardadas si existieran
+          }
+        }));
+        setToast({ message: `Hola de nuevo, ${user.email?.split('@')[0]}`, type: 'success' });
+      } else {
+        // Usuario desconectado
+        setState(prev => ({ 
+          ...prev, 
+          auth: { isLoggedIn: false },
+          user: { ...prev.user, isPremium: false } 
+        }));
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -110,28 +154,95 @@ const App: React.FC = () => {
     }));
   };
 
+  const handlePremiumUpgrade = async () => {
+    setToast({ message: "Procesando pago seguro...", type: 'info' });
+    
+    // Simular latencia de pago
+    await new Promise(r => setTimeout(r, 2000));
+    
+    if (auth.currentUser) {
+      // Guardar en Firebase Real
+      await FirebaseService.upgradeToPremium(auth.currentUser.uid);
+      
+      setState(prev => ({
+        ...prev,
+        user: { ...prev.user, isPremium: true }
+      }));
+      setToast({ message: "¡Compra exitosa! Premium activado en la nube.", type: 'success' });
+    } else {
+      // Usuario invitado (solo local)
+      setState(prev => ({
+        ...prev,
+        user: { ...prev.user, isPremium: true }
+      }));
+      setToast({ message: "¡Bienvenido a UrbanFlow+ Premium!", type: 'success' });
+    }
+  };
+
+  const handleVoiceSearch = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      setToast({ message: "Tu dispositivo no soporta voz", type: 'info' });
+      return;
+    }
+
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.lang = state.user.language === Language.EN ? 'en-US' : state.user.language === Language.PT ? 'pt-BR' : 'es-ES';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setToast({ message: "Escuchando...", type: 'info' });
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setToast({ message: `Buscando: ${transcript}`, type: 'success' });
+      handleSearch(transcript);
+    };
+
+    recognition.onerror = () => setToast({ message: "No te entendí, intenta de nuevo", type: 'info' });
+    
+    recognition.start();
+  };
+
   const handleSearch = async (query: string) => {
     if (!query.trim()) return;
     setState(prev => ({ ...prev, isLoading: true, destination: query }));
     
     try {
+      // 1. Interpretar Intención (IA - Disponible para todos para saber destino)
       const parsed = await parseNaturalLanguageQuery(query);
-      const routes = generateMockRoutes(parsed.destination || query, state.user.isPremium);
+      
+      // 2. Obtener Clima Real
       const weather = await ExternalServices.getWeatherUpdate(0, 0);
+      
+      let routes: RouteResult[] = [];
 
-      setTimeout(() => {
-        setState(prev => ({ 
-          ...prev, 
-          isLoading: false, 
-          searchResults: routes, 
-          currentPage: 'planner',
-          selectedRoute: routes[0], // Auto-select best
-          weather: { temp: weather.temp, condition: weather.condition }
-        }));
-      }, 1200);
+      // 3. LOGICA PREMIUM: Bloquear IA Generativa si no paga
+      if (state.user.isPremium) {
+        // Usuario Paga: Rutas Inteligentes con Gemini
+        routes = await generateSmartRoutes(parsed.destination || query, weather);
+      } else {
+        // Usuario Gratis: Rutas Estándar (Fallback)
+        await new Promise(r => setTimeout(r, 1000));
+        routes = getFallbackRoutes(parsed.destination || query);
+        setToast({ message: "Modo Gratuito: IA desactivada", type: 'info' });
+      }
+
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        searchResults: routes, 
+        currentPage: 'planner',
+        selectedRoute: routes[0], 
+        weather: { temp: weather.temp, condition: weather.condition }
+      }));
+
     } catch (error) {
       console.error("Search failed", error);
       setState(prev => ({ ...prev, isLoading: false }));
+      setToast({ message: "Error buscando rutas", type: 'info' });
     }
   };
 
@@ -185,7 +296,7 @@ const App: React.FC = () => {
       case 'login':
         return <Login 
           language={state.user.language} 
-          onLogin={(profile) => setState(p => ({ ...p, auth: { isLoggedIn: true, profile }, currentPage: 'home' }))} 
+          onLogin={() => { /* Manejado por onAuthStateChanged */ }} 
           onSkip={() => setState(p => ({ ...p, currentPage: 'home' }))} 
         />;
 
@@ -194,13 +305,28 @@ const App: React.FC = () => {
           <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0B0F14] text-gray-900 dark:text-white overflow-y-auto hide-scrollbar pb-40">
             <div className="p-6 pt-14 flex justify-between items-center">
               <div>
-                <p className="text-[13px] opacity-60 dark:opacity-40 font-medium mb-0.5">{t.welcome}</p>
+                <p className="text-[13px] opacity-60 dark:opacity-40 font-medium mb-0.5">
+                  {state.auth?.isLoggedIn ? `Hola, ${state.auth.profile?.name}` : t.welcome}
+                </p>
                 <h1 className="text-[32px] font-black tracking-tight leading-tight">UrbanFlow<span className="text-blue-500">+</span></h1>
               </div>
               <button onClick={() => setState(p => ({ ...p, currentPage: 'settings' }))} className="w-11 h-11 bg-white dark:bg-white/5 rounded-full border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-900 dark:text-white">
                 <Icons.Settings />
               </button>
             </div>
+
+            {/* Login CTA for Guest */}
+            {!state.auth?.isLoggedIn && (
+               <div className="px-6 mb-6">
+                 <div onClick={() => setState(p => ({ ...p, currentPage: 'login' }))} className="bg-gradient-to-r from-gray-900 to-black dark:from-white dark:to-gray-200 p-4 rounded-3xl flex items-center justify-between shadow-xl cursor-pointer">
+                    <div className="text-white dark:text-black">
+                      <p className="font-bold text-sm">Sincroniza tus viajes</p>
+                      <p className="text-[10px] opacity-70">Guarda favoritos y gana puntos</p>
+                    </div>
+                    <div className="bg-white dark:bg-black text-black dark:text-white px-4 py-2 rounded-full text-[10px] font-black uppercase">Login</div>
+                 </div>
+               </div>
+            )}
 
             <div className="px-6 mb-6">
               <div className="bg-white dark:bg-[#121820] rounded-[22px] p-5 flex items-center border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-xl focus-within:border-blue-500/50 transition-all">
@@ -210,8 +336,18 @@ const App: React.FC = () => {
                   className="bg-transparent w-full outline-none font-medium text-lg placeholder-gray-400 dark:placeholder-gray-500 text-gray-900 dark:text-white" 
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSearch((e.target as HTMLInputElement).value); }} 
                 />
-                <button className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center active:scale-90 transition-transform text-white"><Icons.Mic /></button>
+                <button 
+                  onClick={handleVoiceSearch}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform text-white shadow-lg ${state.user.isPremium ? 'bg-gradient-to-r from-indigo-500 to-purple-500 shadow-purple-500/30' : 'bg-blue-600 shadow-blue-600/30'}`}
+                >
+                  <Icons.Mic />
+                </button>
               </div>
+              {!state.user.isPremium && (
+                <div className="mt-2 text-center">
+                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">IA Smart Routing: Bloqueado 🔒</span>
+                </div>
+              )}
             </div>
 
             <div className="px-6 mb-8">
@@ -229,6 +365,13 @@ const App: React.FC = () => {
                <QuickActionCard icon={<Icons.Work />} label={t.work} status />
                <QuickActionCard icon={<Icons.Star />} label={t.favorites} />
             </div>
+
+            {/* Espacio para Publicidad Nativa */}
+            {!state.user.isPremium && (
+              <div className="px-6 mb-8">
+                 <AdBanner type="banner" />
+              </div>
+            )}
 
             <div className="px-6 mb-8">
                <h2 className="text-xl font-black mb-4 text-gray-900 dark:text-white">{t.nearbyStops}</h2>
@@ -270,6 +413,26 @@ const App: React.FC = () => {
                 <FilterChip label={t.cheapest} active={state.selectedFilter === 'cheapest'} onClick={() => setState(p => ({ ...p, selectedFilter: 'cheapest' }))} />
                 <FilterChip label={t.lessWalking} active={state.selectedFilter === 'less_walking'} onClick={() => setState(p => ({ ...p, selectedFilter: 'less_walking' }))} />
               </div>
+              
+              {!state.user.isPremium ? (
+                 <>
+                   <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl text-white shadow-lg mb-4 cursor-pointer" onClick={() => setState(p => ({ ...p, currentPage: 'premium' }))}>
+                      <div className="flex justify-between items-center">
+                         <div>
+                            <p className="text-[10px] font-black uppercase opacity-70 mb-1">Mejora a Premium</p>
+                            <p className="font-bold text-sm">Desbloquea rutas IA + Sin Anuncios</p>
+                         </div>
+                         <div className="text-2xl">🔒</div>
+                      </div>
+                   </div>
+                   <AdBanner type="banner" />
+                 </>
+              ) : (
+                <div className="flex items-center gap-2 mb-2">
+                   <span className="text-xs font-black uppercase text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">✨ AI Powered Routing Active</span>
+                </div>
+              )}
+              
               <RouteList 
                 routes={filteredRoutes} 
                 onSelect={(route) => setState(p => ({ ...p, selectedRoute: route }))} 
@@ -288,8 +451,11 @@ const App: React.FC = () => {
           <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0B0F14] text-gray-900 dark:text-white">
             <div className="flex-1 relative">
               <MapPreview selectedRoute={state.selectedRoute} theme={state.user.theme} />
-              <button onClick={() => setState(p => ({ ...p, currentPage: 'planner' }))} className="absolute top-14 left-6 p-4 bg-white/90 dark:bg-white/10 backdrop-blur-md rounded-full shadow-2xl z-50 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white">
-                <Icons.Clock />
+              <button 
+                onClick={() => setState(p => ({ ...p, currentPage: 'home' }))} 
+                className="absolute top-14 left-6 p-4 bg-white/90 dark:bg-white/10 backdrop-blur-md rounded-full shadow-2xl z-50 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white active:scale-95 transition-transform"
+              >
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 19l-7-7 7-7"/></svg>
               </button>
               
               {state.isSharingLive && (
@@ -362,7 +528,14 @@ const App: React.FC = () => {
         );
 
       case 'impact': return <ImpactCenter state={state} />;
-      case 'premium': return <PremiumDashboard user={state.user} language={state.user.language} />;
+      case 'premium': 
+        return (
+           <PremiumDashboard 
+              user={state.user} 
+              language={state.user.language} 
+              onUpgrade={handlePremiumUpgrade}
+           />
+        );
       case 'launch_guide': return <LaunchGuide onClose={() => setState(p => ({ ...p, currentPage: 'home' }))} />;
       case 'offline_manager': return <OfflineManager onClose={() => setState(p => ({ ...p, currentPage: 'settings' }))} />;
       
@@ -374,8 +547,22 @@ const App: React.FC = () => {
                <SettingsItem icon={<Icons.Globe />} label="Idioma" value="Español" />
                <SettingsItem icon={<Icons.Bolt />} label="Tema" value={state.user.theme === 'dark' ? 'Oscuro' : 'Claro'} onClick={toggleTheme} />
                <SettingsItem icon={<Icons.CloudOff />} label="Mapas Offline" onClick={() => setState(p => ({ ...p, currentPage: 'offline_manager' }))} />
+               {state.user.isPremium ? (
+                  <div className="p-6 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-[32px] flex items-center justify-between shadow-xl">
+                     <span className="font-bold text-white text-sm">Plan Premium Activo</span>
+                     <Icons.Star />
+                  </div>
+               ) : (
+                  <SettingsItem icon={<Icons.Star />} label="Obtener Premium" onClick={() => setState(p => ({ ...p, currentPage: 'premium' }))} />
+               )}
+               {state.auth?.isLoggedIn && (
+                 <SettingsItem 
+                    icon={<div className="text-red-500"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg></div>}
+                    label="Cerrar Sesión" 
+                    onClick={() => auth.signOut()} 
+                 />
+               )}
                <SettingsItem icon={<Icons.Database />} label="Guía de Producción" dev onClick={() => setState(p => ({ ...p, currentPage: 'launch_guide' }))} />
-               <SettingsItem icon={<Icons.Shield />} label="Privacidad y Seguridad" />
             </div>
             <button onClick={() => setState(p => ({ ...p, currentPage: 'home' }))} className="mt-auto py-5 bg-gray-900 dark:bg-white text-white dark:text-black rounded-2xl font-black uppercase tracking-widest text-[10px]">Cerrar</button>
           </div>
@@ -389,6 +576,16 @@ const App: React.FC = () => {
     <div className="max-w-md mx-auto h-screen relative bg-gray-50 dark:bg-[#0B0F14] overflow-hidden flex flex-col shadow-2xl">
       <main className="flex-1 overflow-hidden relative">
         {renderContent()}
+        
+        {/* PIP Floating Navigation */}
+        {state.isNavigating && state.currentPage !== 'navigation' && state.selectedRoute && (
+          <FloatingPIP 
+            route={state.selectedRoute} 
+            onExpand={() => setState(p => ({ ...p, currentPage: 'navigation' }))}
+            onClose={cancelRoute}
+          />
+        )}
+
         {showReportModal && (
           <ReportModal 
             onClose={() => setShowReportModal(false)} 
@@ -417,12 +614,13 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Bottom Nav */}
       {state.currentPage !== 'onboarding' && state.currentPage !== 'login' && !['navigation', 'launch_guide', 'offline_manager'].includes(state.currentPage) && (
         <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto h-[92px] border-t border-gray-200 dark:border-white/5 bg-white/90 dark:bg-[#0B0F14]/90 backdrop-blur-xl flex items-center justify-around px-8 z-50 rounded-t-[40px]">
           <NavButton active={state.currentPage === 'home'} onClick={() => setState(p => ({ ...p, currentPage: 'home' }))} icon={<Icons.Home />} label={t.navHome} />
           <NavButton active={state.currentPage === 'social'} onClick={() => setState(p => ({ ...p, currentPage: 'social' }))} icon={<Icons.Users />} label={t.social} />
           <NavButton active={state.currentPage === 'impact'} onClick={() => setState(p => ({ ...p, currentPage: 'impact' }))} icon={<Icons.Trophy />} label={t.impact} />
-          <NavButton active={state.currentPage === 'settings'} onClick={() => setState(p => ({ ...p, currentPage: 'settings' }))} icon={<Icons.Settings />} label={t.navSettings} />
+          <NavButton active={state.currentPage === 'settings' || state.currentPage === 'premium'} onClick={() => setState(p => ({ ...p, currentPage: 'settings' }))} icon={<Icons.Settings />} label={t.navSettings} />
         </nav>
       )}
 
@@ -431,7 +629,9 @@ const App: React.FC = () => {
            <div className="text-center p-12 bg-white dark:bg-[#1a1f26] rounded-[60px] border border-gray-200 dark:border-white/10 shadow-3xl">
              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-8"></div>
              <p className="font-black text-2xl tracking-tighter uppercase italic text-gray-900 dark:text-white">Urban Engine</p>
-             <p className="text-[10px] font-bold opacity-30 mt-2 tracking-widest text-gray-500 dark:text-white">OPTIMIZANDO RUTAS LATAM...</p>
+             <p className="text-[10px] font-bold opacity-30 mt-2 tracking-widest text-gray-500 dark:text-white">
+               {state.user.isPremium ? "OPTIMIZANDO CON GEMINI AI..." : "BUSCANDO RUTAS..."}
+             </p>
            </div>
         </div>
       )}

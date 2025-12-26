@@ -43,11 +43,13 @@ export const ExternalServices = {
 
   // 3. Geocoding (Convertir texto a coordenadas reales)
   searchAddress: async (query: string) => {
-    // Aquí iría la integración con Mapbox Geocoding o Google Places
+    // Aquí iría la integración real con Mapbox Geocoding o Google Places
+    // Para la demo, devolvemos coordenadas fijas pero con una pequeña variación aleatoria
+    // para simular destinos distintos cerca de Av. Paulista.
     return {
       name: query,
-      lat: -23.5615,
-      lng: -46.6559 // Ejemplo: Av. Paulista
+      lat: -23.5615 + (Math.random() * 0.02 - 0.01),
+      lng: -46.6559 + (Math.random() * 0.02 - 0.01)
     };
   }
 };
