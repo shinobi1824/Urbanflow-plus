@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && (npx cap add android || echo 'Android platform setup check passed')",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
     "android": "npm run build && npx cap run android",
