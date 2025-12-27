@@ -20,6 +20,7 @@ import LaunchGuide from './components/LaunchGuide';
 import Onboarding from './components/Onboarding';
 import OfflineManager from './components/OfflineManager';
 import AdBanner from './components/AdBanner';
+import LocationPermissionModal from './components/LocationPermissionModal';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
@@ -65,6 +66,7 @@ const App: React.FC = () => {
   });
 
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(true); // Control visibility of floating prompt
   const [permissionStatus, setPermissionStatus] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const [toast, setToast] = useState<{ message: string, type: 'info' | 'success' | 'error' } | null>(null);
   const t = I18N[state.user.language];
@@ -116,7 +118,7 @@ const App: React.FC = () => {
         }
       });
     } else {
-      // Fallback for browsers not supporting permissions API (like standard Safari)
+      // Fallback for browsers not supporting permissions API
       handleGetLocation();
     }
   }, []);
@@ -127,9 +129,9 @@ const App: React.FC = () => {
       return;
     }
 
-    // Only show toast if explicitly requested (not on background auto-load)
-    if (permissionStatus === 'prompt' || permissionStatus === 'denied') {
-       setToast({ message: "Solicitando acceso GPS...", type: 'info' });
+    // Only show toast if triggered manually or first load
+    if (permissionStatus === 'prompt') {
+       // setToast({ message: "Solicitando acceso GPS...", type: 'info' });
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -142,6 +144,7 @@ const App: React.FC = () => {
         }));
         setPermissionStatus('granted');
         setToast({ message: "Ubicación actualizada", type: 'success' });
+        setShowLocationPrompt(false); // Hide prompt on success
         
         // Update weather based on real location
         ExternalServices.getWeatherUpdate(latitude, longitude).then(w => {
@@ -152,7 +155,7 @@ const App: React.FC = () => {
         console.error("Error GPS:", error);
         if (error.code === 1) {
           setPermissionStatus('denied');
-          setToast({ message: "Permiso denegado. Actívalo en ajustes.", type: 'error' });
+          // Don't show toast, let the floating modal handle the error UI
         } else {
           setToast({ message: "Error obteniendo señal GPS.", type: 'error' });
         }
@@ -174,9 +177,13 @@ const App: React.FC = () => {
       
       let routes: RouteResult[] = [];
 
-      // 3. Generar Rutas con IA usando Ubicación Real
-      // Pasamos state.userLocation para que Gemini use el origen real y genere rutas desde ahí
-      routes = await generateSmartRoutes(parsed.destination || query, weather, state.userLocation);
+      // 3. Generar Rutas con IA usando Ubicación Real y Estado Premium
+      routes = await generateSmartRoutes(
+        parsed.destination || query, 
+        weather, 
+        state.userLocation,
+        state.user.isPremium // <-- Pasamos el estado premium aquí
+      );
 
       setState(prev => ({ 
         ...prev, 
@@ -263,13 +270,6 @@ const App: React.FC = () => {
                   <Icons.Mic />
                 </button>
               </div>
-              
-              {!state.userLocation && permissionStatus === 'denied' && (
-                <div className="mt-3 bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">Permiso de ubicación denegado</p>
-                  <button onClick={() => alert("Por favor, habilita la ubicación en la configuración de tu navegador para UrbanFlow+.")} className="text-[10px] font-black underline text-red-500">AYUDA</button>
-                </div>
-              )}
             </div>
 
             <div className="px-6 mb-8 flex gap-3 overflow-x-auto hide-scrollbar">
@@ -332,6 +332,7 @@ const App: React.FC = () => {
                 language={state.user.language} 
                 activeFilter={state.selectedFilter}
                 selectedRouteId={state.selectedRoute?.id}
+                isPremiumUser={state.user.isPremium} 
               />
             </div>
           </div>
@@ -389,6 +390,15 @@ const App: React.FC = () => {
         )}
         {showReportModal && <ReportModal onClose={() => setShowReportModal(false)} onReport={() => setShowReportModal(false)} />}
       </main>
+
+      {/* Location Permission Floating Modal */}
+      {!state.userLocation && showLocationPrompt && state.currentPage !== 'onboarding' && (
+        <LocationPermissionModal 
+          status={permissionStatus} 
+          onRequest={handleGetLocation} 
+          onDismiss={() => setShowLocationPrompt(false)}
+        />
+      )}
 
       {/* Toast Notification */}
       {toast && (

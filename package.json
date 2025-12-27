@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && (npx cap add android || echo 'Android platform setup check passed') && (sed -i 's/gradle-[0-9.]*-all.zip/gradle-8.5-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties || echo 'No gradle wrapper found to patch')",
+    "build": "tsc && vite build && (npx cap add android || echo 'Android platform setup check passed')",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
     "android": "npm run build && npx cap run android",
