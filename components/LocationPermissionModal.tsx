@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Icons } from '../constants';
+import { Capacitor } from '@capacitor/core';
 
 interface LocationPermissionModalProps {
   onRequest: () => void;
@@ -10,6 +11,20 @@ interface LocationPermissionModalProps {
 
 const LocationPermissionModal: React.FC<LocationPermissionModalProps> = ({ onRequest, status, onDismiss }) => {
   const isDenied = status === 'denied';
+  
+  // Usamos getPlatform para mayor precisión que isNativePlatform
+  const platform = Capacitor.getPlatform(); // 'web', 'ios', 'android'
+  const isNative = platform !== 'web';
+
+  const getDeniedMessage = () => {
+    if (platform === 'android') {
+      return "El acceso al GPS fue denegado. Ve a Configuración > Apps > UrbanFlow+ > Permisos y activa la Ubicación.";
+    }
+    if (platform === 'ios') {
+      return "El acceso fue denegado. Ve a Ajustes > UrbanFlow+ > Localización y selecciona 'Al usarse'.";
+    }
+    return "El acceso fue denegado. Por favor, habilita la ubicación en la configuración de tu navegador para ver rutas reales.";
+  };
 
   return (
     <div className="fixed bottom-24 left-4 right-4 z-[900] animate-[slideUp_0.4s_ease-out]">
@@ -36,20 +51,20 @@ const LocationPermissionModal: React.FC<LocationPermissionModalProps> = ({ onReq
             </h3>
             <p className="text-sm font-medium opacity-60 leading-relaxed text-gray-800 dark:text-gray-300 mb-4">
               {isDenied 
-                ? "El acceso fue denegado. Por favor, habilita la ubicación en la configuración de tu navegador para ver rutas reales." 
-                : "UrbanFlow+ necesita tu GPS para calcular las mejores rutas desde tu posición exacta."}
+                ? getDeniedMessage()
+                : "Para mostrarte paradas y rutas cercanas, UrbanFlow+ necesita acceder a tu ubicación."}
             </p>
 
             <button 
               onClick={onRequest}
               className={`w-full py-3.5 rounded-xl font-black uppercase tracking-widest text-xs shadow-lg transition-transform active:scale-95 flex items-center justify-center gap-2 ${
                 isDenied 
-                  ? 'bg-gray-200 dark:bg-white/10 text-gray-500 dark:text-white cursor-not-allowed' 
+                  ? (isNative ? 'bg-gray-200 dark:bg-white/10 text-gray-500 dark:text-white' : 'bg-gray-200 dark:bg-white/10 text-gray-500 dark:text-white cursor-not-allowed')
                   : 'bg-blue-600 text-white shadow-blue-600/30'
               }`}
             >
               {isDenied ? (
-                <span>Revisa Ajustes del Navegador</span>
+                <span>{isNative ? "Intentar de nuevo" : "Revisa el Navegador"}</span>
               ) : (
                 <>
                   <Icons.Pin /> ACTIVAR AHORA

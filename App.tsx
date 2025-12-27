@@ -7,6 +7,8 @@ import { fetchNearbyAgencies, TransitEvents } from './services/transit';
 import { ExternalServices } from './services/external';
 import { auth, FirebaseService } from './services/firebase'; 
 import { onAuthStateChanged } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 
 import RouteList from './components/RouteList';
 import MapPreview from './components/MapPreview';
@@ -114,22 +116,29 @@ const App: React.FC = () => {
   // Check Permission State on Load
   useEffect(() => {
     const checkPermission = async () => {
-      // Wrap in try-catch because permissions.query() throws on some Android WebViews / Browsers if not supported
       try {
-        if (navigator.permissions && navigator.permissions.query) {
-          const result = await navigator.permissions.query({ name: 'geolocation' as any });
-          setPermissionStatus(result.state as any);
-          if (result.state === 'granted') {
+        const platform = Capacitor.getPlatform();
+        if (platform !== 'web') {
+          // Native Logic (Android/iOS)
+          const status = await Geolocation.checkPermissions();
+          setPermissionStatus(status.location as any);
+          if (status.location === 'granted') {
             handleGetLocation();
           }
         } else {
-          // If permission API is not supported, just try to get location (which will prompt if needed)
-          handleGetLocation();
+          // Web Logic
+          if (navigator.permissions && navigator.permissions.query) {
+            const result = await navigator.permissions.query({ name: 'geolocation' as any });
+            setPermissionStatus(result.state as any);
+            if (result.state === 'granted') {
+              handleGetLocation();
+            }
+          } else {
+             handleGetLocation();
+          }
         }
       } catch (e) {
-        console.warn("Permissions Query not supported:", e);
-        // Fallback: try getting location directly
-        handleGetLocation();
+        console.warn("Permissions check failed:", e);
       }
     };
     
@@ -137,38 +146,84 @@ const App: React.FC = () => {
   }, []);
 
   const handleGetLocation = async () => {
-    if (!navigator.geolocation) {
-      setToast({ message: "Geolocalización no soportada", type: 'error' });
-      return;
-    }
+    try {
+      let lat, lng;
+      const platform = Capacitor.getPlatform();
+      const isNative = platform !== 'web';
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
+      if (isNative) {
+        // --- NATIVE GEOLOCATION STRATEGY ---
+        // Explicitly request permissions on Android/iOS
+        // This triggers the native OS dialog
+        try {
+          const permission = await Geolocation.requestPermissions();
+          
+          if (permission.location !== 'granted') {
+             // If denied, we update status so the modal appears
+             setPermissionStatus('denied');
+             // Optionally show toast, but the modal is better
+             return;
+          }
+        } catch (permError) {
+          console.error("Permission Request Failed:", permError);
+          setPermissionStatus('denied');
+          return;
+        }
+
+        // Get Coordinates
+        const position = await Geolocation.getCurrentPosition({ 
+          enableHighAccuracy: true,
+          timeout: 10000 
+        });
+        lat = position.coords.latitude;
+        lng = position.coords.longitude;
+
+      } else {
+        // --- WEB GEOLOCATION STRATEGY ---
+        if (!navigator.geolocation) {
+          setToast({ message: "Geolocalización no soportada", type: 'error' });
+          return;
+        }
+
+        await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              lat = position.coords.latitude;
+              lng = position.coords.longitude;
+              resolve(true);
+            },
+            (error) => {
+              reject(error);
+            },
+            { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+          );
+        });
+      }
+
+      // Success Logic (Shared)
+      if (lat && lng) {
         setState(prev => ({
           ...prev,
-          userLocation: { lat: latitude, lng: longitude },
+          userLocation: { lat, lng },
           origin: "Mi Ubicación"
         }));
         setPermissionStatus('granted');
         setToast({ message: "Ubicación actualizada", type: 'success' });
-        setShowLocationPrompt(false); // Hide prompt on success
+        setShowLocationPrompt(false);
         
-        // Update weather based on real location
-        ExternalServices.getWeatherUpdate(latitude, longitude).then(w => {
+        ExternalServices.getWeatherUpdate(lat, lng).then(w => {
            setState(p => ({ ...p, weather: { temp: w.temp, condition: w.condition } }));
         });
-      },
-      (error) => {
-        console.error("Error GPS:", error);
-        if (error.code === 1) {
-          setPermissionStatus('denied');
-        } else {
-          setToast({ message: "Error obteniendo señal GPS.", type: 'error' });
-        }
-      },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-    );
+      }
+
+    } catch (error: any) {
+      console.error("Error GPS:", error);
+      if (error.code === 1 || error.message?.includes('denied')) {
+        setPermissionStatus('denied');
+      } else {
+        setToast({ message: "Error de señal GPS", type: 'error' });
+      }
+    }
   };
 
   const handleSearch = async (query: string) => {
@@ -176,20 +231,15 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, isLoading: true, destination: query }));
     
     try {
-      // 1. Parsear destino
       const parsed = await parseNaturalLanguageQuery(query);
-      
-      // 2. Clima actual
       const weather = await ExternalServices.getWeatherUpdate(state.userLocation?.lat || 0, state.userLocation?.lng || 0);
-      
       let routes: RouteResult[] = [];
 
-      // 3. Generar Rutas con IA usando Ubicación Real y Estado Premium
       routes = await generateSmartRoutes(
         parsed.destination || query, 
         weather, 
         state.userLocation,
-        state.user?.isPremium // <-- Pasamos el estado premium aquí
+        state.user?.isPremium 
       );
 
       setState(prev => ({ 
@@ -225,7 +275,8 @@ const App: React.FC = () => {
         return <Onboarding onComplete={() => {
           localStorage.setItem('onboarded', 'true');
           setState(p => ({ ...p, currentPage: 'home' }));
-          handleGetLocation(); 
+          // CRITICAL: Request permission explicitly after onboarding
+          setTimeout(() => handleGetLocation(), 100); 
         }} />;
 
       case 'login':
