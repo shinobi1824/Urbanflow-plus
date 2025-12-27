@@ -5,6 +5,11 @@ export enum Language {
   PT = 'pt'
 }
 
+export interface Coordinates {
+  lat: number;
+  lng: number;
+}
+
 export enum TransportMode {
   WALK = 'walk',
   BUS = 'bus',
@@ -96,6 +101,7 @@ export interface AppState {
   user: UserPreferences;
   auth?: { isLoggedIn: boolean; profile?: UserProfile; };
   origin: string;
+  userLocation?: Coordinates; // New field for real GPS
   destination: string;
   searchResults: RouteResult[];
   selectedRoute?: RouteResult;

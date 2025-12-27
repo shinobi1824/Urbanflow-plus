@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { RouteResult, TransportMode } from "../types";
+import { RouteResult, TransportMode, Coordinates } from "../types";
 import { OTPService } from "./otp";
 import { ExternalServices } from "./external";
 
@@ -31,16 +31,26 @@ export async function parseNaturalLanguageQuery(query: string) {
   }
 }
 
-export async function generateSmartRoutes(destination: string, weather: any): Promise<RouteResult[]> {
+export async function generateSmartRoutes(
+  destination: string, 
+  weather: any,
+  userLocation?: Coordinates
+): Promise<RouteResult[]> {
   try {
     // 1. Obtener coordenadas reales del destino
     const destCoords = await ExternalServices.searchAddress(destination);
     
-    // Simulación de origen (Av. Paulista, SP)
-    const originCoords = { lat: -23.5615, lng: -46.6559 }; 
+    // Usar ubicación del usuario o un default si no hay GPS (Fallback Sao Paulo)
+    const originCoords = userLocation || { lat: -23.5615, lng: -46.6559 }; 
 
     // 2. Intentar obtener rutas reales desde OpenTripPlanner (Motor Transmodel)
-    let realRoutes = await OTPService.planTrip(originCoords, destCoords);
+    // Nota: Esto fallará si el OTP Endpoint no cubre la zona del usuario (ej: fuera de Europa para Entur)
+    let realRoutes: RouteResult[] = [];
+    try {
+        realRoutes = await OTPService.planTrip(originCoords, destCoords);
+    } catch (e) {
+        console.log("OTP Skipped or Failed");
+    }
     
     // 3. Si OTP falla (no hay servidor configurado o error de red), usar fallback puro de IA
     const useGenerativeFallback = realRoutes.length === 0;
@@ -49,37 +59,25 @@ export async function generateSmartRoutes(destination: string, weather: any): Pr
 
     if (!useGenerativeFallback) {
       // MODO HÍBRIDO: Datos Reales + Enriquecimiento IA
-      // Pasamos los datos técnicos a Gemini para que agregue el "sabor" (razonamiento, clima, etc)
       prompt = `
         You are an Urban Mobility AI Enhancer.
-        I have these REAL technical routes from OpenTripPlanner: ${JSON.stringify(realRoutes)}.
-        
+        I have these REAL technical routes: ${JSON.stringify(realRoutes)}.
         Current Weather: ${weather.condition}, ${weather.temp}°C.
-
-        Please ENHANCE these routes. Do NOT change the steps, times, or costs significantly.
-        
-        Tasks:
-        1. Add a persuasive "aiReasoning" (in Spanish) based on the weather and route type.
-        2. Calculate realistic "co2Savings" (g) compared to a car.
-        3. Assign a "safetyScore" (0-100).
-        4. Add a "weatherAlert" string if the weather is bad and the route involves walking.
-        5. Return the SAME JSON structure but enriched.
+        ENHANCE these routes. Add reasoning and safety scores.
       `;
     } else {
-      // MODO GENERATIVO PURO (Fallback)
+      // MODO GENERATIVO PURO (Fallback Inteligente con Ubicación Real)
       prompt = `
-        Act as a Transit Engine. Generate 3 distinct routes from "Current Location" to "${destination}".
+        Act as a Local Transit Expert. 
+        I am at Latitude: ${originCoords.lat}, Longitude: ${originCoords.lng}.
+        I want to go to: "${destination}".
+        
+        Generate 3 REALISTIC routes (Fastest, Cheapest, Eco) for this specific city/area based on my coordinates.
+        Use real local transport names (e.g. if in Mexico use Metro/Pesero, if in Bogota use TransMilenio).
         
         Context: Weather is ${weather.condition}, ${weather.temp}°C.
         
-        Routes required: 1. Fastest, 2. Cheapest, 3. Eco-friendly.
-
-        For EACH route:
-        - Create realistic steps (Walk, Bus, Metro).
-        - Estimate duration/cost.
-        - "aiReasoning": A short persuasive sentence (in Spanish).
-        
-        Output JSON matching the RouteResult schema.
+        Output JSON matching RouteResult schema.
       `;
     }
 
@@ -142,43 +140,24 @@ export async function generateSmartRoutes(destination: string, weather: any): Pr
 }
 
 export function getFallbackRoutes(destination: string): RouteResult[] {
+  // Rutas estáticas de emergencia si Gemini y OTP fallan
   return [
     {
       id: "fallback-1",
-      totalTime: 22,
-      startTime: "09:00",
-      endTime: "09:22",
-      cost: 4.50,
-      walkingDistance: 300,
+      totalTime: 25,
+      startTime: "Now",
+      endTime: "+25m",
+      cost: 2.50,
+      walkingDistance: 400,
       transfers: 1,
-      co2Savings: 500,
+      co2Savings: 300,
       isAccessible: true,
-      caloriesBurned: 45,
-      aiReasoning: "🔒 Análisis IA bloqueado. Actualiza a Premium.",
+      caloriesBurned: 50,
+      aiReasoning: "Modo Offline: Ruta estimada directa.",
       isPremium: false,
       steps: [
-        { mode: TransportMode.WALK, instruction: "Caminar a parada", durationMinutes: 5 },
-        { mode: TransportMode.BUS, instruction: `Bus estándar a ${destination}`, durationMinutes: 15, lineName: "Ruta 101" },
-        { mode: TransportMode.WALK, instruction: "Llegada", durationMinutes: 2 }
-      ]
-    },
-    {
-      id: "fallback-2",
-      totalTime: 45,
-      startTime: "09:00",
-      endTime: "09:45",
-      cost: 2.00,
-      walkingDistance: 900,
-      transfers: 2,
-      co2Savings: 800,
-      isAccessible: false,
-      caloriesBurned: 120,
-      aiReasoning: "🔒 Análisis IA bloqueado.",
-      isPremium: false,
-      steps: [
-        { mode: TransportMode.WALK, instruction: "Caminata larga", durationMinutes: 15 },
-        { mode: TransportMode.METRO, instruction: "Metro Línea B", durationMinutes: 25, lineName: "LB" },
-        { mode: TransportMode.WALK, instruction: "Llegada", durationMinutes: 5 }
+        { mode: TransportMode.WALK, instruction: "Caminar a estación principal", durationMinutes: 5 },
+        { mode: TransportMode.BUS, instruction: `Transporte a ${destination}`, durationMinutes: 20, lineName: "Ruta Directa" }
       ]
     }
   ];
