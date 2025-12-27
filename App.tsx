@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Language, AppState, UserPreferences, RouteResult, TransportMode, UserProfile, RouteFilter, SocialPost } from './types';
 import { I18N, Icons, COLORS } from './constants';
 import { parseNaturalLanguageQuery, generateSmartRoutes, getFallbackRoutes } from './services/gemini';
@@ -25,8 +24,27 @@ import AdBanner from './components/AdBanner';
 import LocationPermissionModal from './components/LocationPermissionModal';
 
 const App: React.FC = () => {
+  const [searchInput, setSearchInput] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
   const [state, setState] = useState<AppState>(() => {
     const hasOnboarded = localStorage.getItem('onboarded') === 'true';
+    
+    // Robust parsing logic to prevent "Uncaught SyntaxError" or corrupted state
+    let savedTrips = [];
+    try {
+      const stored = localStorage.getItem('recentTrips');
+      if (stored && stored !== "undefined" && stored !== "null") {
+        const parsed = JSON.parse(stored);
+        savedTrips = Array.isArray(parsed) ? parsed : [];
+      }
+    } catch (e) {
+      console.warn("Resetting corrupted history", e);
+      savedTrips = [];
+    }
+
     return {
       currentPage: hasOnboarded ? 'home' : 'onboarding',
       user: {
@@ -58,7 +76,7 @@ const App: React.FC = () => {
       nearbyAgencies: [],
       liveVehicles: [],
       liveArrivals: [],
-      recentTrips: [],
+      recentTrips: savedTrips,
       weather: { temp: 22, condition: 'Cloudy' },
       socialFeed: [
         { id: 'p1', userName: 'Mateo_Flow', userAvatar: 'M', type: 'alert', content: 'Metro L8 parado en estación Central.', likes: 12, lineContext: 'Metro L8', timestamp: Date.now() - 3600000 },
@@ -84,6 +102,19 @@ const App: React.FC = () => {
       document.documentElement.classList.remove('dark');
     }
   }, [state.user?.theme]);
+
+  // Handle outside click to close suggestions
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Auth Listener
   useEffect(() => {
@@ -144,6 +175,33 @@ const App: React.FC = () => {
     
     checkPermission();
   }, []);
+
+  // Escritura predictiva
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (searchInput.length > 1) {
+        const preds = await ExternalServices.getPredictions(searchInput);
+        setSuggestions(preds);
+        setShowSuggestions(true);
+      } else {
+        setSuggestions([]);
+      }
+    };
+    const timeoutId = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchInput]);
+
+  // Manejo de duración del Toast
+  useEffect(() => {
+    if (toast) {
+      // 300ms para actualizaciones de ubicación, 3000ms para otros mensajes
+      const duration = toast.message === "Ubicación actualizada" ? 300 : 3000;
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, duration);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const handleGetLocation = async () => {
     try {
@@ -229,6 +287,7 @@ const App: React.FC = () => {
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) return;
+    setShowSuggestions(false); // Hide suggestions
     setState(prev => ({ ...prev, isLoading: true, destination: query }));
     
     try {
@@ -256,6 +315,25 @@ const App: React.FC = () => {
       console.error("Search failed", error);
       setState(prev => ({ ...prev, isLoading: false }));
       setToast({ message: "Error buscando rutas. Intenta de nuevo.", type: 'info' });
+    }
+  };
+
+  const handleSmartPaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const extractedAddress = ExternalServices.extractAddressFromText(text);
+      
+      if (extractedAddress) {
+        setSearchInput(extractedAddress);
+        setToast({ message: t.clipboardDetected, type: 'success' });
+        // Optional: Auto search
+        // handleSearch(extractedAddress); 
+      } else {
+        setToast({ message: "No se encontró dirección en portapapeles", type: 'info' });
+      }
+    } catch (e) {
+      console.warn("Clipboard access denied", e);
+      setToast({ message: "Permiso de portapapeles denegado", type: 'error' });
     }
   };
 
@@ -300,8 +378,8 @@ const App: React.FC = () => {
               </button>
             </div>
 
-            <div className="px-6 mb-6">
-              <div className="bg-white dark:bg-[#121820] rounded-[22px] p-5 flex items-center border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-xl focus-within:border-blue-500/50 transition-all relative">
+            <div className="px-6 mb-6 relative z-50" ref={searchContainerRef}>
+              <div className="bg-white dark:bg-[#121820] rounded-[22px] p-5 flex items-center border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-xl focus-within:border-blue-500/50 transition-all relative z-10">
                 <button 
                    onClick={handleGetLocation}
                    className={`w-8 h-8 rounded-full mr-2 flex items-center justify-center transition-all active:scale-90 ${state.userLocation ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500 animate-pulse'}`}
@@ -313,14 +391,77 @@ const App: React.FC = () => {
                 <input 
                   type="text" 
                   placeholder={t.searchPlaceholder} 
-                  className="bg-transparent w-full outline-none font-medium text-lg placeholder-gray-400 dark:placeholder-gray-500 text-gray-900 dark:text-white" 
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearch((e.target as HTMLInputElement).value); }} 
+                  className="bg-transparent w-full outline-none font-medium text-lg placeholder-gray-400 dark:placeholder-gray-500 text-gray-900 dark:text-white"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onFocus={() => setShowSuggestions(true)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(searchInput); }} 
+                  autoComplete="off"
                 />
                 
+                <button 
+                  onClick={() => handleSearch(searchInput)}
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 active:scale-90 transition-all mr-1"
+                >
+                   <Icons.Search />
+                </button>
+
                 <button onClick={() => {}} className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform text-white shadow-lg bg-blue-600 shadow-blue-600/30`}>
                   <Icons.Mic />
                 </button>
               </div>
+
+              {/* Predictive Dropdown & Smart Paste */}
+              {showSuggestions && (
+                 <div className="absolute top-[80%] left-6 right-6 bg-white/95 dark:bg-[#121820]/95 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-b-[22px] rounded-t-lg shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                    
+                    {/* Smart Paste Option */}
+                    <button 
+                      onClick={handleSmartPaste}
+                      className="w-full text-left px-5 py-4 border-b border-gray-100 dark:border-white/5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group"
+                    >
+                       <div className="w-8 h-8 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Icons.Clipboard />
+                       </div>
+                       <div>
+                          <p className="text-xs font-black uppercase text-indigo-500 dark:text-indigo-400 tracking-wide">{t.smartPaste}</p>
+                          <p className="text-[10px] opacity-50">Detectar dirección copiada</p>
+                       </div>
+                    </button>
+
+                    {/* Suggestions List */}
+                    <div className="max-h-[200px] overflow-y-auto hide-scrollbar">
+                       {suggestions.length > 0 ? (
+                         suggestions.map((s, i) => (
+                           <button 
+                             key={i} 
+                             onClick={() => { setSearchInput(s); handleSearch(s); }}
+                             className="w-full text-left px-5 py-3 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-3 border-b border-gray-100 dark:border-white/5 last:border-0"
+                           >
+                              <div className="text-gray-400"><Icons.Pin /></div>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{s}</span>
+                           </button>
+                         ))
+                       ) : (
+                         state.recentTrips.length > 0 && (
+                            <div className="py-2">
+                               <p className="px-5 py-1 text-[10px] font-black uppercase opacity-30 tracking-widest">{t.recent}</p>
+                               {state.recentTrips.slice(0, 3).map((trip, i) => (
+                                 <button 
+                                   key={`hist-${i}`}
+                                   onClick={() => { setSearchInput(trip.destination); handleSearch(trip.destination); }}
+                                   className="w-full text-left px-5 py-3 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-3"
+                                 >
+                                    <div className="text-gray-400 opacity-50"><Icons.Clock /></div>
+                                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{trip.destination}</span>
+                                 </button>
+                               ))}
+                            </div>
+                         )
+                       )}
+                    </div>
+                 </div>
+              )}
             </div>
 
             <div className="px-6 mb-8 flex gap-3 overflow-x-auto hide-scrollbar">
@@ -352,7 +493,14 @@ const App: React.FC = () => {
           </div>
         );
 
-      case 'social': return <SocialFeed posts={state.socialFeed || []} language={currentLang} />;
+      case 'social': 
+        return (
+          <SocialFeed 
+            posts={state.socialFeed || []} 
+            language={currentLang} 
+            onOpenReport={() => setShowReportModal(true)}
+          />
+        );
 
       case 'planner':
         return (
@@ -427,7 +575,32 @@ const App: React.FC = () => {
   };
 
   const cancelRoute = () => setState(p => ({ ...p, selectedRoute: undefined, isNavigating: false, currentPage: 'planner', isSharingLive: false }));
-  const startNavigation = (route: RouteResult) => setState(p => ({ ...p, selectedRoute: route, isNavigating: true, currentPage: 'navigation' }));
+  
+  const startNavigation = (route: RouteResult) => {
+    setState(prev => {
+      // Create new trip entry
+      const newTrip = {
+        id: route.id,
+        destination: prev.destination || "Destino seleccionado",
+        date: new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        duration: route.totalTime,
+        cost: route.cost,
+        mainMode: route.steps[0]?.mode || TransportMode.WALK
+      };
+      
+      // Update and persist history (Max 5 items)
+      const updatedTrips = [newTrip, ...prev.recentTrips].slice(0, 5);
+      localStorage.setItem('recentTrips', JSON.stringify(updatedTrips));
+
+      return { 
+        ...prev, 
+        selectedRoute: route, 
+        isNavigating: true, 
+        currentPage: 'navigation',
+        recentTrips: updatedTrips 
+      };
+    });
+  };
 
   return (
     <div className="max-w-md mx-auto h-screen relative bg-gray-50 dark:bg-[#0B0F14] overflow-hidden flex flex-col shadow-2xl">
@@ -478,6 +651,10 @@ const App: React.FC = () => {
         @keyframes slideInToast {
           from { transform: translateY(-100%); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { VehiclePosition, TransportMode, RouteResult, GeoArea, Coordinates } from '../types';
@@ -248,10 +249,13 @@ const MapPreview: React.FC<MapPreviewProps> = ({
         .addTo(map.current);
     }
 
-    // Si no hay ruta seleccionada, centrar en usuario la primera vez
+    // Si no hay ruta seleccionada, centrar en usuario la primera vez para mejor UX
     if (!selectedRoute) {
-       // Opcional: Centrar suavemente
-       // map.current.easeTo({ center: [userLocation.lng, userLocation.lat], zoom: 14 });
+       map.current.easeTo({ 
+         center: [userLocation.lng, userLocation.lat], 
+         zoom: 15,
+         duration: 2000 
+       });
     }
 
   }, [userLocation]);

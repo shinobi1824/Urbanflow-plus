@@ -1,11 +1,18 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { RouteResult, TransportMode, Coordinates } from "../types";
 import { OTPService } from "./otp";
 import { ExternalServices } from "./external";
 
-// Inicializamos el cliente.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Inicializamos el cliente de manera segura para evitar crashes si la API Key falla
+let ai: GoogleGenAI;
+try {
+  // Use a fallback to prevent constructor error, though API calls will fail if invalid
+  ai = new GoogleGenAI({ apiKey: process.env.API_KEY || 'MISSING_KEY' });
+} catch (e) {
+  console.error("Critical: Failed to initialize GoogleGenAI", e);
+  // Mock minimal interface to prevent crash usage
+  ai = { models: { generateContent: async () => { throw new Error("AI not initialized"); } } } as any;
+}
 
 // Helper para limpiar respuestas de Gemini que incluyen bloques de código markdown
 const cleanJson = (text: string) => {
@@ -42,6 +49,28 @@ export async function parseNaturalLanguageQuery(query: string) {
     console.warn("NLP Parse failed, using raw query:", error);
     return { destination: query };
   }
+}
+
+export function getFallbackRoutes(): RouteResult[] {
+  return [
+    {
+      id: 'fallback-1',
+      totalTime: 45,
+      cost: 4.50,
+      walkingDistance: 500,
+      transfers: 1,
+      co2Savings: 120,
+      steps: [
+        { mode: TransportMode.WALK, instruction: 'Caminar a estación', durationMinutes: 10 },
+        { mode: TransportMode.METRO, instruction: 'Tomar Línea Azul', durationMinutes: 30, lineName: 'L1', color: '#3B82F6' },
+        { mode: TransportMode.WALK, instruction: 'Caminar a destino', durationMinutes: 5 }
+      ],
+      aiReasoning: "Ruta offline/fallback generada localmente.",
+      isAccessible: true,
+      startTime: "Ahora",
+      endTime: "45 min"
+    }
+  ];
 }
 
 export async function generateSmartRoutes(
@@ -114,121 +143,46 @@ export async function generateSmartRoutes(
               walkingDistance: { type: Type.NUMBER },
               transfers: { type: Type.NUMBER },
               co2Savings: { type: Type.NUMBER },
-              aiReasoning: { type: Type.STRING },
-              isAccessible: { type: Type.BOOLEAN },
-              startTime: { type: Type.STRING },
-              endTime: { type: Type.STRING },
-              isPremium: { type: Type.BOOLEAN },
-              weatherAlert: { type: Type.STRING, nullable: true },
-              safetyScore: { type: Type.NUMBER, nullable: true },
-              caloriesBurned: { type: Type.NUMBER },
-              trafficDelayMinutes: { type: Type.NUMBER, nullable: true },
               steps: {
                 type: Type.ARRAY,
                 items: {
                   type: Type.OBJECT,
                   properties: {
-                    mode: { type: Type.STRING, enum: ["walk", "bus", "metro", "train", "bike", "ride", "scooter"] },
+                    mode: { type: Type.STRING, description: "walk, bus, metro, train, bike, ride, scooter" },
                     instruction: { type: Type.STRING },
                     durationMinutes: { type: Type.NUMBER },
-                    lineName: { type: Type.STRING, nullable: true },
-                    color: { type: Type.STRING, nullable: true }
+                    lineName: { type: Type.STRING },
+                    color: { type: Type.STRING }
                   },
                   required: ["mode", "instruction", "durationMinutes"]
                 }
-              }
+              },
+              aiReasoning: { type: Type.STRING },
+              isAccessible: { type: Type.BOOLEAN },
+              startTime: { type: Type.STRING },
+              endTime: { type: Type.STRING },
             },
-            required: ["id", "totalTime", "cost", "steps", "aiReasoning"]
+            required: ["id", "totalTime", "cost", "steps", "startTime", "endTime"]
           }
         }
       }
     });
 
-    // Sanitize response before parsing
-    const cleanText = cleanJson(response.text || "[]");
-    const routes = JSON.parse(cleanText);
+    const text = response.text;
+    if (!text) throw new Error("Empty response from AI");
+
+    const generatedRoutes = JSON.parse(cleanJson(text));
     
-    if (!routes.length && useGenerativeFallback) throw new Error("No routes generated");
-    
-    // Filtrado de características Premium vs Básico
-    return routes.map((r: any) => {
-      // Defensive check for steps
-      const steps = r.steps || [];
-      const isRideShare = steps.some((s:any) => s.mode === 'ride');
-      
-      return { 
-        ...r, 
-        steps,
-        // Si NO es usuario premium y NO es un viaje de Uber (que siempre tiene info básica), censuramos la IA y el tráfico
-        aiReasoning: isPremiumUser ? r.aiReasoning : "LOCKED_PREMIUM",
-        trafficDelayMinutes: isPremiumUser ? r.trafficDelayMinutes : undefined,
-        // Marcar como 'isPremium' (bandera de UI) si es caro
-        isPremium: r.cost > 10 
-      };
-    });
+    // Assign IDs if missing and ensure Types
+    return generatedRoutes.map((r: any, i: number) => ({
+      ...r,
+      id: r.id || `gen-${i}-${Date.now()}`,
+      // ensure steps is array
+      steps: r.steps || []
+    }));
 
   } catch (error) {
-    console.error("AI Routing failed completely:", error);
-    return getFallbackRoutes(destination);
+    console.error("Generative Route Failed", error);
+    return getFallbackRoutes();
   }
-}
-
-export function getFallbackRoutes(destination: string): RouteResult[] {
-  // FALLBACK ACTUALIZADO: Simulando opciones variadas tipo Moovit
-  return [
-    {
-      id: "rec-1",
-      totalTime: 35,
-      startTime: "14:00",
-      endTime: "14:35",
-      cost: 4.50,
-      walkingDistance: 350,
-      transfers: 1,
-      co2Savings: 450,
-      isAccessible: true,
-      caloriesBurned: 40,
-      aiReasoning: "Ruta recomendada: Balance tiempo/costo.",
-      isPremium: false,
-      steps: [
-        { mode: TransportMode.WALK, instruction: "Caminar a estación", durationMinutes: 5 },
-        { mode: TransportMode.METRO, instruction: "Metro Línea 4", durationMinutes: 20, lineName: "L4", color: "#EF4444" },
-        { mode: TransportMode.BUS, instruction: "Bus 857R hacia centro", durationMinutes: 10, lineName: "857R", color: "#3B82F6" }
-      ]
-    },
-    {
-      id: "cheap-1",
-      totalTime: 55,
-      startTime: "14:05",
-      endTime: "15:00",
-      cost: 2.20,
-      walkingDistance: 150,
-      transfers: 0,
-      co2Savings: 600,
-      isAccessible: true,
-      caloriesBurned: 15,
-      aiReasoning: "Opción más barata. Solo autobús.",
-      isPremium: false,
-      steps: [
-        { mode: TransportMode.WALK, instruction: "Caminar a parada", durationMinutes: 5 },
-        { mode: TransportMode.BUS, instruction: "Bus Directo Interurbano", durationMinutes: 50, lineName: "201", color: "#F59E0B" }
-      ]
-    },
-    {
-      id: "ride-1",
-      totalTime: 18,
-      startTime: "Ahora",
-      endTime: "+18m",
-      cost: 15.90,
-      walkingDistance: 0,
-      transfers: 0,
-      co2Savings: 0,
-      isAccessible: true,
-      caloriesBurned: 0,
-      aiReasoning: "Más rápido. Servicio de transporte privado.",
-      isPremium: true,
-      steps: [
-        { mode: TransportMode.RIDE, instruction: "Viaje en Uber/Bolt", durationMinutes: 18, lineName: "UberX" }
-      ]
-    }
-  ];
 }

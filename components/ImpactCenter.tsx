@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { AppState, Achievement } from '../types';
+import { AppState, Achievement, TransportMode } from '../types';
 import { I18N, Icons } from '../constants';
 
 interface ImpactCenterProps {
@@ -51,6 +51,45 @@ const ImpactCenter: React.FC<ImpactCenterProps> = ({ state }) => {
             <div className="text-3xl font-black italic">{profile.treesPlanted || 0}</div>
           </div>
         </div>
+      </div>
+
+      {/* Recent Trips Section */}
+      <div className="px-8 mb-12">
+        <div className="flex items-center justify-between mb-6">
+           <h2 className="text-xl font-black tracking-tight">{t.recent}</h2>
+           {state.recentTrips.length > 0 && <span className="text-[10px] font-bold opacity-40 bg-gray-200 dark:bg-white/10 px-2 py-1 rounded-md">Últimos 5</span>}
+        </div>
+        
+        {state.recentTrips.length === 0 ? (
+          <div className="p-8 bg-white dark:bg-[#121820] rounded-[32px] border border-gray-200 dark:border-white/5 text-center flex flex-col items-center opacity-60">
+             <div className="mb-3 text-2xl grayscale opacity-50">🚍</div>
+             <p className="text-sm font-medium">Aún no has realizado viajes.</p>
+             <p className="text-xs opacity-50 mt-1">Tus rutas aparecerán aquí.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {state.recentTrips.map((trip: any, index: number) => (
+               <div key={`${trip.id}-${index}`} className="bg-white dark:bg-[#121820] p-5 rounded-[28px] border border-gray-200 dark:border-white/5 flex items-center justify-between shadow-sm dark:shadow-none">
+                  <div className="flex items-center gap-4">
+                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg ${
+                        trip.mainMode === TransportMode.METRO ? 'bg-red-500/10 text-red-500' :
+                        trip.mainMode === TransportMode.BUS ? 'bg-blue-500/10 text-blue-500' :
+                        'bg-gray-100 dark:bg-white/5 text-gray-500'
+                     }`}>
+                        {trip.mainMode === TransportMode.BUS ? <Icons.Bus /> : trip.mainMode === TransportMode.METRO ? <Icons.Metro /> : <Icons.Walk />}
+                     </div>
+                     <div>
+                        <h4 className="font-bold text-sm text-gray-900 dark:text-white line-clamp-1">{trip.destination}</h4>
+                        <p className="text-[11px] font-bold opacity-40 uppercase tracking-wide mt-0.5">{trip.date} • {trip.duration} min</p>
+                     </div>
+                  </div>
+                  <div className="text-right pl-4 border-l border-gray-100 dark:border-white/5">
+                      <span className="block font-black text-sm text-gray-900 dark:text-white">${trip.cost}</span>
+                  </div>
+               </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Virtual Forest */}

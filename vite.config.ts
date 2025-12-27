@@ -1,4 +1,3 @@
-
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -10,6 +9,9 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     define: {
       'process.env.API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY),
+      // Fix: Do not polyfill 'process' here aggressively as it conflicts with index.html polyfill.
+      // We rely on the index.html script to set window.process for libs that check 'typeof process'.
+      global: 'window', 
     },
     build: {
       outDir: 'dist',

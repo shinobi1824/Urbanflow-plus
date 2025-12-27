@@ -1,4 +1,3 @@
-
 import { initializeApp } from "firebase/app";
 import { 
   getAuth, 
@@ -32,13 +31,18 @@ export const db = getFirestore(app);
 
 // Inicializar Analytics de manera segura (asíncrona)
 export let analytics: any = null;
-isSupported().then((supported: boolean) => {
-  if (supported) {
-    analytics = getAnalytics(app);
-  }
-}).catch((e: any) => {
-  console.warn("Analytics not supported in this environment:", e);
-});
+
+try {
+  isSupported().then((supported: boolean) => {
+    if (supported) {
+      analytics = getAnalytics(app);
+    }
+  }).catch((e: any) => {
+    console.warn("Analytics not supported in this environment:", e);
+  });
+} catch (e) {
+  console.warn("Firebase Analytics init error:", e);
+}
 
 // Helpers para Base de Datos
 export const FirebaseService = {

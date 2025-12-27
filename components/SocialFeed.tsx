@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SocialPost, Language } from '../types';
 import { I18N, Icons } from '../constants';
@@ -6,9 +5,10 @@ import { I18N, Icons } from '../constants';
 interface SocialFeedProps {
   posts: SocialPost[];
   language: Language;
+  onOpenReport?: () => void;
 }
 
-const SocialFeed: React.FC<SocialFeedProps> = ({ posts, language }) => {
+const SocialFeed: React.FC<SocialFeedProps> = ({ posts, language, onOpenReport }) => {
   const t = I18N[language];
 
   return (
@@ -19,10 +19,13 @@ const SocialFeed: React.FC<SocialFeedProps> = ({ posts, language }) => {
 
         {/* Action Bar */}
         <div className="flex gap-4 mb-10 overflow-x-auto hide-scrollbar -mx-8 px-8">
-          <button className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 rounded-[24px] font-black text-xs uppercase flex items-center gap-3 shadow-xl shadow-blue-600/20">
+          <button 
+            onClick={onOpenReport}
+            className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 rounded-[24px] font-black text-xs uppercase flex items-center gap-3 shadow-xl shadow-blue-600/20 active:scale-95 transition-transform"
+          >
             <Icons.Message /> Nuevo Reporte
           </button>
-          <button className="flex-shrink-0 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 px-6 py-4 rounded-[24px] font-black text-xs uppercase flex items-center gap-3 text-gray-900 dark:text-white">
+          <button className="flex-shrink-0 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 px-6 py-4 rounded-[24px] font-black text-xs uppercase flex items-center gap-3 text-gray-900 dark:text-white active:scale-95 transition-transform">
             <Icons.Users /> Amigos
           </button>
         </div>
