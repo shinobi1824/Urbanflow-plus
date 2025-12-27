@@ -7,14 +7,14 @@ import { fetchNearbyAgencies, TransitEvents } from './services/transit';
 import { ExternalServices } from './services/external';
 import { auth, FirebaseService } from './services/firebase'; 
 import { onAuthStateChanged } from 'firebase/auth';
-import { Capacitor } from '@capacitor/core';
-import { Geolocation } from '@capacitor/geolocation';
+import { useLocation } from './hooks/useLocation';
 
 import RouteList from './components/RouteList';
 import MapPreview from './components/MapPreview';
 import PremiumDashboard from './components/PremiumDashboard';
 import Login from './components/Login';
 import ImpactCenter from './components/ImpactCenter';
+import Header from './components/Header';
 import SocialFeed from './components/SocialFeed';
 import FloatingPIP from './components/FloatingPIP';
 import ReportModal from './components/ReportModal';
@@ -23,6 +23,8 @@ import Onboarding from './components/Onboarding';
 import OfflineManager from './components/OfflineManager';
 import AdBanner from './components/AdBanner';
 import LocationPermissionModal from './components/LocationPermissionModal';
+import Settings from './components/Settings';
+import Favorites from './components/Favorites';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
@@ -68,10 +70,18 @@ const App: React.FC = () => {
   });
 
   const [showReportModal, setShowReportModal] = useState(false);
-  const [showLocationPrompt, setShowLocationPrompt] = useState(true); // Control visibility of floating prompt
-  const [permissionStatus, setPermissionStatus] = useState<'prompt' | 'granted' | 'denied'>('prompt');
-  const [toast, setToast] = useState<{ message: string, type: 'info' | 'success' | 'error' } | null>(null);
-  
+  const { userLocation, permissionStatus, toast: locationToast, handleGetLocation, setToast: setLocationToast } = useLocation();
+  const [appToast, setAppToast] = useState<{ message: string, type: 'info' | 'success' | 'error' } | null>(null);
+
+  const toast = appToast || locationToast;
+  const setToast = (t: any) => {
+    if (t?.message.includes('GPS') || t?.message.includes('Ubicación')) {
+      setLocationToast(t);
+    } else {
+      setAppToast(t);
+    }
+  };
+
   // Guard for state user language
   const currentLang = state.user?.language || Language.ES;
   const t = I18N[currentLang];
@@ -84,6 +94,20 @@ const App: React.FC = () => {
       document.documentElement.classList.remove('dark');
     }
   }, [state.user?.theme]);
+
+  // Effect to sync location from hook to state
+  useEffect(() => {
+    if (userLocation) {
+      setState(prev => ({
+        ...prev,
+        userLocation: userLocation,
+        origin: "Mi Ubicación"
+      }));
+      ExternalServices.getWeatherUpdate(userLocation.lat, userLocation.lng).then(w => {
+        setState(p => ({ ...p, weather: { temp: w.temp, condition: w.condition } }));
+      });
+    }
+  }, [userLocation]);
 
   // Auth Listener
   useEffect(() => {
@@ -112,120 +136,6 @@ const App: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
-
-  // Check Permission State on Load
-  useEffect(() => {
-    const checkPermission = async () => {
-      try {
-        const platform = Capacitor.getPlatform();
-        if (platform !== 'web') {
-          // Native Logic (Android/iOS)
-          const status = await Geolocation.checkPermissions();
-          setPermissionStatus(status.location as any);
-          if (status.location === 'granted') {
-            handleGetLocation();
-          }
-        } else {
-          // Web Logic
-          if (navigator.permissions && navigator.permissions.query) {
-            const result = await navigator.permissions.query({ name: 'geolocation' as any });
-            setPermissionStatus(result.state as any);
-            if (result.state === 'granted') {
-              handleGetLocation();
-            }
-          } else {
-             handleGetLocation();
-          }
-        }
-      } catch (e) {
-        console.warn("Permissions check failed:", e);
-      }
-    };
-    
-    checkPermission();
-  }, []);
-
-  const handleGetLocation = async () => {
-    try {
-      let lat: number | undefined;
-      let lng: number | undefined;
-      const platform = Capacitor.getPlatform();
-      const isNative = platform !== 'web';
-
-      if (isNative) {
-        // --- NATIVE GEOLOCATION STRATEGY ---
-        // Explicitly request permissions on Android/iOS
-        // This triggers the native OS dialog
-        try {
-          const permission = await Geolocation.requestPermissions();
-          
-          if (permission.location !== 'granted') {
-             // If denied, we update status so the modal appears
-             setPermissionStatus('denied');
-             // Optionally show toast, but the modal is better
-             return;
-          }
-        } catch (permError) {
-          console.error("Permission Request Failed:", permError);
-          setPermissionStatus('denied');
-          return;
-        }
-
-        // Get Coordinates
-        const position = await Geolocation.getCurrentPosition({ 
-          enableHighAccuracy: true,
-          timeout: 10000 
-        });
-        lat = position.coords.latitude;
-        lng = position.coords.longitude;
-
-      } else {
-        // --- WEB GEOLOCATION STRATEGY ---
-        if (!navigator.geolocation) {
-          setToast({ message: "Geolocalización no soportada", type: 'error' });
-          return;
-        }
-
-        await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              lat = position.coords.latitude;
-              lng = position.coords.longitude;
-              resolve(true);
-            },
-            (error) => {
-              reject(error);
-            },
-            { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-          );
-        });
-      }
-
-      // Success Logic (Shared)
-      if (lat !== undefined && lng !== undefined) {
-        setState(prev => ({
-          ...prev,
-          userLocation: { lat: lat!, lng: lng! },
-          origin: "Mi Ubicación"
-        }));
-        setPermissionStatus('granted');
-        setToast({ message: "Ubicación actualizada", type: 'success' });
-        setShowLocationPrompt(false);
-        
-        ExternalServices.getWeatherUpdate(lat, lng).then(w => {
-           setState(p => ({ ...p, weather: { temp: w.temp, condition: w.condition } }));
-        });
-      }
-
-    } catch (error: any) {
-      console.error("Error GPS:", error);
-      if (error.code === 1 || error.message?.includes('denied')) {
-        setPermissionStatus('denied');
-      } else {
-        setToast({ message: "Error de señal GPS", type: 'error' });
-      }
-    }
-  };
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) return;
@@ -286,19 +196,12 @@ const App: React.FC = () => {
       case 'home':
         return (
           <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0B0F14] text-gray-900 dark:text-white overflow-y-auto hide-scrollbar pb-40">
-            <div className="p-6 pt-14 flex justify-between items-center">
-              <div>
-                <p className="text-[13px] opacity-60 dark:opacity-40 font-medium mb-0.5">
-                  {state.auth?.isLoggedIn ? `Hola, ${state.auth.profile?.name}` : t.welcome}
-                </p>
-                <div className="flex items-center gap-2">
-                   <h1 className="text-[32px] font-black tracking-tight leading-tight">UrbanFlow<span className="text-blue-500">+</span></h1>
-                </div>
-              </div>
-              <button onClick={() => setState(p => ({ ...p, currentPage: 'settings' }))} className="w-11 h-11 bg-white dark:bg-white/5 rounded-full border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-900 dark:text-white">
-                <Icons.Settings />
-              </button>
-            </div>
+            <Header
+              isLoggedIn={state.auth.isLoggedIn}
+              userName={state.auth.profile?.name}
+              welcomeMessage={t.welcome}
+              onSettingsClick={() => handleNavigate('settings')}
+            />
 
             <div className="px-6 mb-6">
               <div className="bg-white dark:bg-[#121820] rounded-[22px] p-5 flex items-center border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-xl focus-within:border-blue-500/50 transition-all relative">
@@ -314,19 +217,19 @@ const App: React.FC = () => {
                   type="text" 
                   placeholder={t.searchPlaceholder} 
                   className="bg-transparent w-full outline-none font-medium text-lg placeholder-gray-400 dark:placeholder-gray-500 text-gray-900 dark:text-white" 
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearch((e.target as HTMLInputElement).value); }} 
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearch((e.target as HTMLInputElement).value); }}
                 />
                 
-                <button onClick={() => {}} className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform text-white shadow-lg bg-blue-600 shadow-blue-600/30`}>
+                <button onClick={handleVoiceSearch} className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform text-white shadow-lg bg-blue-600 shadow-blue-600/30`}>
                   <Icons.Mic />
                 </button>
               </div>
             </div>
 
             <div className="px-6 mb-8 flex gap-3 overflow-x-auto hide-scrollbar">
-               <QuickActionCard icon={<Icons.Home />} label={t.home} status dot />
-               <QuickActionCard icon={<Icons.Work />} label={t.work} status />
-               <QuickActionCard icon={<Icons.Star />} label={t.favorites} />
+               <QuickActionCard icon={<Icons.Home />} label={t.home} onClick={() => handleSearch(state.user.homeAddress || '')} status={!!state.user.homeAddress} dot />
+               <QuickActionCard icon={<Icons.Work />} label={t.work} onClick={() => handleSearch(state.user.workAddress || '')} status={!!state.user.workAddress} />
+               <QuickActionCard icon={<Icons.Star />} label={t.favorites} onClick={() => handleNavigate('favorites')} />
             </div>
 
             {!state.user?.isPremium && <div className="px-6 mb-8"><AdBanner type="banner" /></div>}
@@ -420,14 +323,76 @@ const App: React.FC = () => {
       case 'launch_guide': return <LaunchGuide onClose={() => setState(p => ({ ...p, currentPage: 'home' }))} />;
       case 'offline_manager': return <OfflineManager onClose={() => setState(p => ({ ...p, currentPage: 'settings' }))} />;
       case 'settings':
-         return <div className="p-8"><h1 className="text-2xl">Ajustes</h1><button onClick={() => setState(p => ({...p, currentPage: 'home'}))}>Volver</button></div>;
+        return (
+          <Settings
+            user={state.user}
+            profile={state.auth.profile}
+            onUpdate={handleUpdateUser}
+            onNavigate={handleNavigate}
+            onLogout={handleLogout}
+            language={currentLang}
+          />
+        );
+
+      case 'favorites':
+        return <Favorites onNavigate={handleNavigate} language={currentLang} />;
 
       default: return null;
     }
   };
 
+  const handleUpdateUser = (key: keyof UserPreferences, value: any) => {
+    setState(prev => ({
+      ...prev,
+      user: { ...prev.user, [key]: value }
+    }));
+    // Persist simple preferences
+    if (key === 'theme' || key === 'language') {
+      localStorage.setItem(key, value);
+    }
+  };
+
+  const handleNavigate = (page: string) => {
+    setState(p => ({ ...p, currentPage: page }));
+  };
+
+  const handleLogout = async () => {
+    await auth.signOut();
+    setState(p => ({ ...p, currentPage: 'home' }));
+  };
+
   const cancelRoute = () => setState(p => ({ ...p, selectedRoute: undefined, isNavigating: false, currentPage: 'planner', isSharingLive: false }));
   const startNavigation = (route: RouteResult) => setState(p => ({ ...p, selectedRoute: route, isNavigating: true, currentPage: 'navigation' }));
+
+  const handleVoiceSearch = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setToast({ message: "El dictado por voz no es compatible con este navegador.", type: 'error' });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = state.user.language === Language.ES ? 'es-ES' : 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    setToast({ message: "Escuchando...", type: 'info' });
+
+    recognition.onresult = (event: any) => {
+      const speechResult = event.results[0][0].transcript;
+      handleSearch(speechResult);
+    };
+
+    recognition.onspeechend = () => {
+      recognition.stop();
+    };
+
+    recognition.onerror = (event: any) => {
+      setToast({ message: `Error de reconocimiento: ${event.error}`, type: 'error' });
+    };
+
+    recognition.start();
+  };
 
   return (
     <div className="max-w-md mx-auto h-screen relative bg-gray-50 dark:bg-[#0B0F14] overflow-hidden flex flex-col shadow-2xl">
@@ -485,7 +450,7 @@ const App: React.FC = () => {
 };
 
 const QuickActionCard = ({ icon, label, dot }: any) => (
-  <button className="flex-shrink-0 w-[95px] h-[140px] bg-white dark:bg-[#121820] border border-gray-200 dark:border-white/5 rounded-[28px] flex flex-col items-center justify-center p-4 gap-4 active:scale-95 transition-all relative shadow-sm dark:shadow-none">
+    <button onClick={onClick} className="flex-shrink-0 w-[95px] h-[140px] bg-white dark:bg-[#121820] border border-gray-200 dark:border-white/5 rounded-[28px] flex flex-col items-center justify-center p-4 gap-4 active:scale-95 transition-all relative shadow-sm dark:shadow-none">
     {dot && <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>}
     <div className="text-gray-900 dark:text-white opacity-60">{icon}</div>
     <span className="text-[12px] font-bold text-center leading-tight opacity-60 text-gray-900 dark:text-white">{label}</span>
