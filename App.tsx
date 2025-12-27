@@ -147,7 +147,8 @@ const App: React.FC = () => {
 
   const handleGetLocation = async () => {
     try {
-      let lat, lng;
+      let lat: number | undefined;
+      let lng: number | undefined;
       const platform = Capacitor.getPlatform();
       const isNative = platform !== 'web';
 
@@ -201,10 +202,10 @@ const App: React.FC = () => {
       }
 
       // Success Logic (Shared)
-      if (lat && lng) {
+      if (lat !== undefined && lng !== undefined) {
         setState(prev => ({
           ...prev,
-          userLocation: { lat, lng },
+          userLocation: { lat: lat!, lng: lng! },
           origin: "Mi Ubicación"
         }));
         setPermissionStatus('granted');

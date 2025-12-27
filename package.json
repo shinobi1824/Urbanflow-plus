@@ -6,11 +6,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && (npx cap add android || echo 'Android platform setup check passed')",
+    "type-check": "tsc",
+    "build": "tsc && vite build",
+    "build:fast": "vite build",
     "preview": "vite preview",
-    "cap:sync": "npm run build && npx cap sync",
-    "android": "npm run build && npx cap run android",
-    "ios": "npm run build && npx cap run ios"
+    "cap:sync": "npm run build:fast && npx cap sync",
+    "android": "npm run build:fast && npx cap sync android && npx cap run android",
+    "android:full": "npm run build && npx cap sync android && npx cap run android",
+    "ios": "npm run build:fast && npx cap sync ios && npx cap run ios"
   },
   "dependencies": {
     "@google/genai": "^1.34.0",
