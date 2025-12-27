@@ -21,9 +21,6 @@ import Onboarding from './components/Onboarding';
 import OfflineManager from './components/OfflineManager';
 import AdBanner from './components/AdBanner';
 
-// Capacitor Geolocation import (opcional si usas web fallback)
-// import { Geolocation } from '@capacitor/geolocation'; 
-
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => {
     const hasOnboarded = localStorage.getItem('onboarded') === 'true';
@@ -68,6 +65,7 @@ const App: React.FC = () => {
   });
 
   const [showReportModal, setShowReportModal] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const [toast, setToast] = useState<{ message: string, type: 'info' | 'success' | 'error' } | null>(null);
   const t = I18N[state.user.language];
 
@@ -108,9 +106,19 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Request Geolocation on Load
+  // Check Permission State on Load
   useEffect(() => {
-    handleGetLocation();
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+        setPermissionStatus(result.state as any);
+        if (result.state === 'granted') {
+          handleGetLocation();
+        }
+      });
+    } else {
+      // Fallback for browsers not supporting permissions API (like standard Safari)
+      handleGetLocation();
+    }
   }, []);
 
   const handleGetLocation = async () => {
@@ -119,7 +127,10 @@ const App: React.FC = () => {
       return;
     }
 
-    setToast({ message: "Obteniendo ubicación GPS...", type: 'info' });
+    // Only show toast if explicitly requested (not on background auto-load)
+    if (permissionStatus === 'prompt' || permissionStatus === 'denied') {
+       setToast({ message: "Solicitando acceso GPS...", type: 'info' });
+    }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -129,6 +140,7 @@ const App: React.FC = () => {
           userLocation: { lat: latitude, lng: longitude },
           origin: "Mi Ubicación"
         }));
+        setPermissionStatus('granted');
         setToast({ message: "Ubicación actualizada", type: 'success' });
         
         // Update weather based on real location
@@ -138,9 +150,14 @@ const App: React.FC = () => {
       },
       (error) => {
         console.error("Error GPS:", error);
-        setToast({ message: "Permiso de ubicación denegado. Toca el botón de GPS.", type: 'error' });
+        if (error.code === 1) {
+          setPermissionStatus('denied');
+          setToast({ message: "Permiso denegado. Actívalo en ajustes.", type: 'error' });
+        } else {
+          setToast({ message: "Error obteniendo señal GPS.", type: 'error' });
+        }
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   };
 
@@ -158,14 +175,14 @@ const App: React.FC = () => {
       let routes: RouteResult[] = [];
 
       // 3. Generar Rutas con IA usando Ubicación Real
-      // Pasamos state.userLocation para que Gemini use el origen real
+      // Pasamos state.userLocation para que Gemini use el origen real y genere rutas desde ahí
       routes = await generateSmartRoutes(parsed.destination || query, weather, state.userLocation);
 
       setState(prev => ({ 
         ...prev, 
         isLoading: false, 
         searchResults: routes, 
-        currentPage: 'planner',
+        currentPage: 'planner', 
         selectedRoute: routes[0], 
         weather: { temp: weather.temp, condition: weather.condition }
       }));
@@ -177,8 +194,7 @@ const App: React.FC = () => {
     }
   };
 
-  // ... (Resto de funciones igual: handleVoiceSearch, startNavigation, etc.) ...
-  const handleVoiceSearch = () => { /* Same as before */ };
+  const handleVoiceSearch = () => { setToast({message: "Escuchando...", type: 'info'}); };
   const toggleTheme = () => setState(prev => ({ ...prev, user: { ...prev.user, theme: prev.user.theme === 'dark' ? 'light' : 'dark' } }));
   const startNavigation = (route: RouteResult) => setState(p => ({ ...p, selectedRoute: route, isNavigating: true, currentPage: 'navigation' }));
   const cancelRoute = () => setState(p => ({ ...p, selectedRoute: undefined, isNavigating: false, currentPage: 'planner', isSharingLive: false }));
@@ -202,7 +218,7 @@ const App: React.FC = () => {
         return <Onboarding onComplete={() => {
           localStorage.setItem('onboarded', 'true');
           setState(p => ({ ...p, currentPage: 'home' }));
-          handleGetLocation(); // Ask permissions right after onboarding
+          handleGetLocation(); // Request explicitly after onboarding interaction
         }} />;
 
       case 'login':
@@ -226,12 +242,15 @@ const App: React.FC = () => {
             </div>
 
             <div className="px-6 mb-6">
-              <div className="bg-white dark:bg-[#121820] rounded-[22px] p-5 flex items-center border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-xl focus-within:border-blue-500/50 transition-all">
-                {/* Location Status Dot */}
-                <div 
-                   className={`w-2 h-2 rounded-full mr-3 ${state.userLocation ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}
-                   title={state.userLocation ? "GPS Activo" : "Sin GPS"}
-                ></div>
+              <div className="bg-white dark:bg-[#121820] rounded-[22px] p-5 flex items-center border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-xl focus-within:border-blue-500/50 transition-all relative">
+                {/* Location Status Dot / Button */}
+                <button 
+                   onClick={handleGetLocation}
+                   className={`w-8 h-8 rounded-full mr-2 flex items-center justify-center transition-all active:scale-90 ${state.userLocation ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500 animate-pulse'}`}
+                   title={state.userLocation ? "GPS Activo" : "Activar GPS"}
+                >
+                   {state.userLocation ? <Icons.Pin /> : <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="16"/></svg>}
+                </button>
                 
                 <input 
                   type="text" 
@@ -240,17 +259,17 @@ const App: React.FC = () => {
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSearch((e.target as HTMLInputElement).value); }} 
                 />
                 
-                {/* GPS Retry Button if missing */}
-                {!state.userLocation && (
-                  <button onClick={handleGetLocation} className="mr-2 text-gray-400">
-                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/></svg>
-                  </button>
-                )}
-                
                 <button onClick={() => {}} className={`w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform text-white shadow-lg bg-blue-600 shadow-blue-600/30`}>
                   <Icons.Mic />
                 </button>
               </div>
+              
+              {!state.userLocation && permissionStatus === 'denied' && (
+                <div className="mt-3 bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center justify-between">
+                  <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">Permiso de ubicación denegado</p>
+                  <button onClick={() => alert("Por favor, habilita la ubicación en la configuración de tu navegador para UrbanFlow+.")} className="text-[10px] font-black underline text-red-500">AYUDA</button>
+                </div>
+              )}
             </div>
 
             <div className="px-6 mb-8 flex gap-3 overflow-x-auto hide-scrollbar">
@@ -269,9 +288,11 @@ const App: React.FC = () => {
                      <div className="flex items-center gap-4">
                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500"><Icons.Bus /></div>
                        <div>
-                         <h4 className="font-bold text-sm text-gray-900 dark:text-white">Parada Cercana</h4>
+                         <h4 className="font-bold text-sm text-gray-900 dark:text-white">
+                            {state.userLocation ? "Parada más cercana a ti" : "Ubicación desconocida"}
+                         </h4>
                          <p className="text-[10px] opacity-60 dark:opacity-40 font-black uppercase text-gray-500 dark:text-gray-400">
-                           {state.userLocation ? `${state.userLocation.lat.toFixed(4)}, ${state.userLocation.lng.toFixed(4)}` : "Sin ubicación"}
+                           {state.userLocation ? `${state.userLocation.lat.toFixed(4)}, ${state.userLocation.lng.toFixed(4)}` : "Toca el botón GPS arriba"}
                          </p>
                        </div>
                      </div>
@@ -287,14 +308,14 @@ const App: React.FC = () => {
         return (
           <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0B0F14] text-gray-900 dark:text-white overflow-hidden">
             <div className="h-[30%] w-full relative">
-              {/* Pass userLocation to MapPreview */}
+              {/* Pass userLocation to MapPreview so it centers correctly */}
               <MapPreview 
                 selectedRoute={state.selectedRoute} 
                 theme={state.user.theme} 
                 userLocation={state.userLocation} 
               />
-              <button onClick={() => setState(p => ({ ...p, currentPage: 'home', selectedRoute: undefined }))} className="absolute top-14 left-6 p-3 bg-white/90 dark:bg-[#121820]/80 backdrop-blur-md rounded-full border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-lg">
-                <Icons.Clock />
+              <button onClick={() => setState(p => ({ ...p, currentPage: 'home', selectedRoute: undefined }))} className="absolute top-14 left-6 p-3 bg-white/90 dark:bg-[#121820]/80 backdrop-blur-md rounded-full border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-lg z-20">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 19l-7-7 7-7"/></svg>
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar pb-32">
@@ -394,7 +415,7 @@ const App: React.FC = () => {
            <div className="text-center p-12 bg-white dark:bg-[#1a1f26] rounded-[60px] border border-gray-200 dark:border-white/10 shadow-3xl">
              <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-8"></div>
              <p className="font-black text-2xl tracking-tighter uppercase italic text-gray-900 dark:text-white">Generando Ruta</p>
-             <p className="text-[10px] font-bold opacity-30 mt-2 tracking-widest text-gray-500 dark:text-white">ANALIZANDO TRÁFICO REAL...</p>
+             <p className="text-[10px] font-bold opacity-30 mt-2 tracking-widest text-gray-500 dark:text-white">CALCULANDO DESDE TU GPS...</p>
            </div>
         </div>
       )}
