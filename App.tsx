@@ -69,16 +69,19 @@ const App: React.FC = () => {
   const [showLocationPrompt, setShowLocationPrompt] = useState(true); // Control visibility of floating prompt
   const [permissionStatus, setPermissionStatus] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const [toast, setToast] = useState<{ message: string, type: 'info' | 'success' | 'error' } | null>(null);
-  const t = I18N[state.user.language];
+  
+  // Guard for state user language
+  const currentLang = state.user?.language || Language.ES;
+  const t = I18N[currentLang];
 
   // Theme Handling
   useEffect(() => {
-    if (state.user.theme === 'dark') {
+    if (state.user?.theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [state.user.theme]);
+  }, [state.user?.theme]);
 
   // Auth Listener
   useEffect(() => {
@@ -90,16 +93,16 @@ const App: React.FC = () => {
           auth: { 
             isLoggedIn: true, 
             profile: {
-              name: userProfile.name || user.email?.split('@')[0] || 'User',
+              name: userProfile?.name || user.email?.split('@')[0] || 'User',
               email: user.email || '',
               initials: (user.email?.[0] || 'U').toUpperCase(),
-              points: userProfile.points,
-              level: userProfile.level,
+              points: userProfile?.points || 0,
+              level: userProfile?.level || 1,
               treesPlanted: 0,
               levelTitle: 'Explorador Urbano'
             }
           },
-          user: { ...prev.user, isPremium: !!userProfile.isPremium }
+          user: { ...prev.user, isPremium: !!userProfile?.isPremium }
         }));
       } else {
         setState(prev => ({ ...prev, auth: { isLoggedIn: false }, user: { ...prev.user, isPremium: false } }));
@@ -110,28 +113,33 @@ const App: React.FC = () => {
 
   // Check Permission State on Load
   useEffect(() => {
-    if (navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
-        setPermissionStatus(result.state as any);
-        if (result.state === 'granted') {
+    const checkPermission = async () => {
+      // Wrap in try-catch because permissions.query() throws on some Android WebViews / Browsers if not supported
+      try {
+        if (navigator.permissions && navigator.permissions.query) {
+          const result = await navigator.permissions.query({ name: 'geolocation' as any });
+          setPermissionStatus(result.state as any);
+          if (result.state === 'granted') {
+            handleGetLocation();
+          }
+        } else {
+          // If permission API is not supported, just try to get location (which will prompt if needed)
           handleGetLocation();
         }
-      });
-    } else {
-      // Fallback for browsers not supporting permissions API
-      handleGetLocation();
-    }
+      } catch (e) {
+        console.warn("Permissions Query not supported:", e);
+        // Fallback: try getting location directly
+        handleGetLocation();
+      }
+    };
+    
+    checkPermission();
   }, []);
 
   const handleGetLocation = async () => {
     if (!navigator.geolocation) {
       setToast({ message: "Geolocalización no soportada", type: 'error' });
       return;
-    }
-
-    // Only show toast if triggered manually or first load
-    if (permissionStatus === 'prompt') {
-       // setToast({ message: "Solicitando acceso GPS...", type: 'info' });
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -155,7 +163,6 @@ const App: React.FC = () => {
         console.error("Error GPS:", error);
         if (error.code === 1) {
           setPermissionStatus('denied');
-          // Don't show toast, let the floating modal handle the error UI
         } else {
           setToast({ message: "Error obteniendo señal GPS.", type: 'error' });
         }
@@ -182,7 +189,7 @@ const App: React.FC = () => {
         parsed.destination || query, 
         weather, 
         state.userLocation,
-        state.user.isPremium // <-- Pasamos el estado premium aquí
+        state.user?.isPremium // <-- Pasamos el estado premium aquí
       );
 
       setState(prev => ({ 
@@ -201,15 +208,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleVoiceSearch = () => { setToast({message: "Escuchando...", type: 'info'}); };
-  const toggleTheme = () => setState(prev => ({ ...prev, user: { ...prev.user, theme: prev.user.theme === 'dark' ? 'light' : 'dark' } }));
-  const startNavigation = (route: RouteResult) => setState(p => ({ ...p, selectedRoute: route, isNavigating: true, currentPage: 'navigation' }));
-  const cancelRoute = () => setState(p => ({ ...p, selectedRoute: undefined, isNavigating: false, currentPage: 'planner', isSharingLive: false }));
-  const toggleShareLive = () => { /* Same */ };
-  const handlePremiumUpgrade = async () => { /* Same */ };
-
   const filteredRoutes = useMemo(() => {
-    let routes = [...state.searchResults];
+    let routes = [...(state.searchResults || [])];
     if (routes.length === 0) return [];
     switch (state.selectedFilter) {
       case 'fastest': return routes.sort((a, b) => a.totalTime - b.totalTime);
@@ -225,11 +225,11 @@ const App: React.FC = () => {
         return <Onboarding onComplete={() => {
           localStorage.setItem('onboarded', 'true');
           setState(p => ({ ...p, currentPage: 'home' }));
-          handleGetLocation(); // Request explicitly after onboarding interaction
+          handleGetLocation(); 
         }} />;
 
       case 'login':
-        return <Login language={state.user.language} onLogin={() => {}} onSkip={() => setState(p => ({ ...p, currentPage: 'home' }))} />;
+        return <Login language={currentLang} onLogin={() => {}} onSkip={() => setState(p => ({ ...p, currentPage: 'home' }))} />;
 
       case 'home':
         return (
@@ -250,7 +250,6 @@ const App: React.FC = () => {
 
             <div className="px-6 mb-6">
               <div className="bg-white dark:bg-[#121820] rounded-[22px] p-5 flex items-center border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-xl focus-within:border-blue-500/50 transition-all relative">
-                {/* Location Status Dot / Button */}
                 <button 
                    onClick={handleGetLocation}
                    className={`w-8 h-8 rounded-full mr-2 flex items-center justify-center transition-all active:scale-90 ${state.userLocation ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500 animate-pulse'}`}
@@ -278,11 +277,10 @@ const App: React.FC = () => {
                <QuickActionCard icon={<Icons.Star />} label={t.favorites} />
             </div>
 
-            {!state.user.isPremium && <div className="px-6 mb-8"><AdBanner type="banner" /></div>}
+            {!state.user?.isPremium && <div className="px-6 mb-8"><AdBanner type="banner" /></div>}
             
             <div className="px-6 mb-8">
                <h2 className="text-xl font-black mb-4 text-gray-900 dark:text-white">{t.nearbyStops}</h2>
-               {/* Render Nearby Agencies */}
                <div className="space-y-3">
                  <div className="bg-white dark:bg-[#121820] p-5 rounded-[28px] border border-gray-200 dark:border-white/5 flex items-center justify-between">
                      <div className="flex items-center gap-4">
@@ -302,16 +300,15 @@ const App: React.FC = () => {
           </div>
         );
 
-      case 'social': return <SocialFeed posts={state.socialFeed} language={state.user.language} />;
+      case 'social': return <SocialFeed posts={state.socialFeed || []} language={currentLang} />;
 
       case 'planner':
         return (
           <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0B0F14] text-gray-900 dark:text-white overflow-hidden">
             <div className="h-[30%] w-full relative">
-              {/* Pass userLocation to MapPreview so it centers correctly */}
               <MapPreview 
                 selectedRoute={state.selectedRoute} 
-                theme={state.user.theme} 
+                theme={state.user?.theme} 
                 userLocation={state.userLocation} 
               />
               <button onClick={() => setState(p => ({ ...p, currentPage: 'home', selectedRoute: undefined }))} className="absolute top-14 left-6 p-3 bg-white/90 dark:bg-[#121820]/80 backdrop-blur-md rounded-full border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white shadow-lg z-20">
@@ -329,10 +326,10 @@ const App: React.FC = () => {
                 onSelect={(route) => setState(p => ({ ...p, selectedRoute: route }))} 
                 onNavigate={startNavigation}
                 onCancel={cancelRoute}
-                language={state.user.language} 
+                language={currentLang} 
                 activeFilter={state.selectedFilter}
                 selectedRouteId={state.selectedRoute?.id}
-                isPremiumUser={state.user.isPremium} 
+                isPremiumUser={state.user?.isPremium} 
               />
             </div>
           </div>
@@ -342,18 +339,15 @@ const App: React.FC = () => {
         return (
           <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0B0F14] text-gray-900 dark:text-white">
             <div className="flex-1 relative">
-              <MapPreview selectedRoute={state.selectedRoute} theme={state.user.theme} userLocation={state.userLocation} />
-              {/* Navigation UI elements */}
+              <MapPreview selectedRoute={state.selectedRoute} theme={state.user?.theme} userLocation={state.userLocation} />
               <button onClick={() => setState(p => ({ ...p, currentPage: 'home' }))} className="absolute top-14 left-6 p-4 bg-white/90 dark:bg-white/10 backdrop-blur-md rounded-full shadow-2xl z-50 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white">
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 19l-7-7 7-7"/></svg>
               </button>
             </div>
-            {/* Steps panel remains same as before */}
             <div className="h-1/2 bg-white dark:bg-[#121820] rounded-t-[48px] p-8 shadow-3xl overflow-y-auto relative">
-                {/* ... existing navigation panel code ... */}
                 <h2 className="text-4xl font-black text-gray-900 dark:text-white mb-4">{state.selectedRoute?.endTime}</h2>
                 <div className="space-y-6">
-                 {state.selectedRoute?.steps.map((step, idx) => (
+                 {state.selectedRoute?.steps?.map((step, idx) => (
                    <div key={idx} className="flex gap-5">
                      <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/5 flex items-center justify-center text-blue-500">
                        {step.mode === TransportMode.BUS ? <Icons.Bus /> : <Icons.Walk />}
@@ -370,16 +364,18 @@ const App: React.FC = () => {
         );
       
       case 'impact': return <ImpactCenter state={state} />;
-      case 'premium': return <PremiumDashboard user={state.user} language={state.user.language} onUpgrade={handlePremiumUpgrade} />;
+      case 'premium': return <PremiumDashboard user={state.user} language={currentLang} onUpgrade={() => {}} />;
       case 'launch_guide': return <LaunchGuide onClose={() => setState(p => ({ ...p, currentPage: 'home' }))} />;
       case 'offline_manager': return <OfflineManager onClose={() => setState(p => ({ ...p, currentPage: 'settings' }))} />;
       case 'settings':
-         // Simplified settings for brevity
          return <div className="p-8"><h1 className="text-2xl">Ajustes</h1><button onClick={() => setState(p => ({...p, currentPage: 'home'}))}>Volver</button></div>;
 
       default: return null;
     }
   };
+
+  const cancelRoute = () => setState(p => ({ ...p, selectedRoute: undefined, isNavigating: false, currentPage: 'planner', isSharingLive: false }));
+  const startNavigation = (route: RouteResult) => setState(p => ({ ...p, selectedRoute: route, isNavigating: true, currentPage: 'navigation' }));
 
   return (
     <div className="max-w-md mx-auto h-screen relative bg-gray-50 dark:bg-[#0B0F14] overflow-hidden flex flex-col shadow-2xl">
@@ -391,7 +387,6 @@ const App: React.FC = () => {
         {showReportModal && <ReportModal onClose={() => setShowReportModal(false)} onReport={() => setShowReportModal(false)} />}
       </main>
 
-      {/* Location Permission Floating Modal */}
       {!state.userLocation && showLocationPrompt && state.currentPage !== 'onboarding' && (
         <LocationPermissionModal 
           status={permissionStatus} 
@@ -400,7 +395,6 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Toast Notification */}
       {toast && (
         <div className={`fixed top-12 left-1/2 -translate-x-1/2 z-[1000] px-6 py-4 rounded-3xl shadow-2xl border flex items-center gap-3 animate-[slideInToast_0.3s_ease-out] ${
           toast.type === 'error' ? 'bg-red-600 border-red-400 text-white' : 
@@ -410,7 +404,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Bottom Nav */}
       {state.currentPage !== 'onboarding' && state.currentPage !== 'login' && !['navigation', 'launch_guide', 'offline_manager'].includes(state.currentPage) && (
         <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto h-[92px] border-t border-gray-200 dark:border-white/5 bg-white/90 dark:bg-[#0B0F14]/90 backdrop-blur-xl flex items-center justify-around px-8 z-50 rounded-t-[40px]">
           <NavButton active={state.currentPage === 'home'} onClick={() => setState(p => ({ ...p, currentPage: 'home' }))} icon={<Icons.Home />} label={t.navHome} />
@@ -431,15 +424,14 @@ const App: React.FC = () => {
       )}
       <style>{`
         @keyframes slideInToast {
-          from { transform: translate(-50%, -100%); opacity: 0; }
-          to { transform: translate(-50%, 0); opacity: 1; }
+          from { transform: translateY(-100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
         }
       `}</style>
     </div>
   );
 };
 
-// Subcomponents helper
 const QuickActionCard = ({ icon, label, dot }: any) => (
   <button className="flex-shrink-0 w-[95px] h-[140px] bg-white dark:bg-[#121820] border border-gray-200 dark:border-white/5 rounded-[28px] flex flex-col items-center justify-center p-4 gap-4 active:scale-95 transition-all relative shadow-sm dark:shadow-none">
     {dot && <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>}

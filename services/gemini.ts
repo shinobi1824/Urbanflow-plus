@@ -7,6 +7,18 @@ import { ExternalServices } from "./external";
 // Inicializamos el cliente.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
+// Helper para limpiar respuestas de Gemini que incluyen bloques de código markdown
+const cleanJson = (text: string) => {
+  if (!text) return "{}";
+  let clean = text.trim();
+  if (clean.startsWith('```json')) {
+    clean = clean.replace(/^```json/, '').replace(/```$/, '');
+  } else if (clean.startsWith('```')) {
+    clean = clean.replace(/^```/, '').replace(/```$/, '');
+  }
+  return clean;
+};
+
 export async function parseNaturalLanguageQuery(query: string) {
   try {
     const response = await ai.models.generateContent({
@@ -23,7 +35,8 @@ export async function parseNaturalLanguageQuery(query: string) {
         }
       }
     });
-    const result = JSON.parse(response.text || "{}");
+    
+    const result = JSON.parse(cleanJson(response.text || "{}"));
     return { destination: result.destination || query };
   } catch (error) {
     console.warn("NLP Parse failed, using raw query:", error);
@@ -131,16 +144,21 @@ export async function generateSmartRoutes(
       }
     });
 
-    const routes = JSON.parse(response.text || "[]");
+    // Sanitize response before parsing
+    const cleanText = cleanJson(response.text || "[]");
+    const routes = JSON.parse(cleanText);
     
     if (!routes.length && useGenerativeFallback) throw new Error("No routes generated");
     
     // Filtrado de características Premium vs Básico
     return routes.map((r: any) => {
-      const isRideShare = r.steps.some((s:any) => s.mode === 'ride');
+      // Defensive check for steps
+      const steps = r.steps || [];
+      const isRideShare = steps.some((s:any) => s.mode === 'ride');
       
       return { 
         ...r, 
+        steps,
         // Si NO es usuario premium y NO es un viaje de Uber (que siempre tiene info básica), censuramos la IA y el tráfico
         aiReasoning: isPremiumUser ? r.aiReasoning : "LOCKED_PREMIUM",
         trafficDelayMinutes: isPremiumUser ? r.trafficDelayMinutes : undefined,
