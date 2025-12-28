@@ -11,6 +11,16 @@ interface SocialFeedProps {
 const SocialFeed: React.FC<SocialFeedProps> = ({ posts, language, onOpenReport }) => {
   const t = I18N[language];
 
+  const getTimeAgo = (timestamp: number) => {
+    const diff = Date.now() - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Ahora';
+    if (minutes < 60) return `Hace ${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Hace ${hours}h`;
+    return 'Hace 1d';
+  };
+
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0B0F14] text-gray-900 dark:text-white overflow-y-auto hide-scrollbar pb-32">
       <div className="p-8 pt-16">
@@ -41,7 +51,7 @@ const SocialFeed: React.FC<SocialFeedProps> = ({ posts, language, onOpenReport }
                 <div className="flex-1">
                   <div className="flex justify-between items-center mb-1">
                     <h3 className="font-bold text-sm text-gray-900 dark:text-white/90">{post.userName}</h3>
-                    <span className="text-[10px] font-black opacity-30 uppercase text-gray-900 dark:text-white">hace 5m</span>
+                    <span className="text-[10px] font-black opacity-30 uppercase text-gray-900 dark:text-white">{getTimeAgo(post.timestamp)}</span>
                   </div>
                   
                   {post.lineContext && (

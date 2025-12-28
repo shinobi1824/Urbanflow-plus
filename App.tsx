@@ -118,25 +118,27 @@ const App: React.FC = () => {
 
   // Auth Listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user: any) => {
+    const unsubscribe = onAuthStateChanged(auth, (user: any) => {
       if (user) {
-        const userProfile = await FirebaseService.syncUserProfile(user);
-        setState(prev => ({
-          ...prev,
-          auth: { 
-            isLoggedIn: true, 
-            profile: {
-              name: userProfile?.name || user.email?.split('@')[0] || 'User',
-              email: user.email || '',
-              initials: (user.email?.[0] || 'U').toUpperCase(),
-              points: userProfile?.points || 0,
-              level: userProfile?.level || 1,
-              treesPlanted: 0,
-              levelTitle: 'Explorador Urbano'
-            }
-          },
-          user: { ...prev.user, isPremium: !!userProfile?.isPremium }
-        }));
+        // Ejecutar la sincronización asíncrona dentro del callback
+        FirebaseService.syncUserProfile(user).then((userProfile) => {
+          setState(prev => ({
+            ...prev,
+            auth: { 
+              isLoggedIn: true, 
+              profile: {
+                name: userProfile?.name || user.email?.split('@')[0] || 'User',
+                email: user.email || '',
+                initials: (user.email?.[0] || 'U').toUpperCase(),
+                points: userProfile?.points || 0,
+                level: userProfile?.level || 1,
+                treesPlanted: 0,
+                levelTitle: 'Explorador Urbano'
+              }
+            },
+            user: { ...prev.user, isPremium: !!userProfile?.isPremium }
+          }));
+        });
       } else {
         setState(prev => ({ ...prev, auth: { isLoggedIn: false }, user: { ...prev.user, isPremium: false } }));
       }
