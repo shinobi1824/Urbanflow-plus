@@ -337,6 +337,36 @@ const App: React.FC = () => {
     }
   };
 
+  // --- REPORTING LOGIC ---
+  const handleReport = (type: string) => {
+    const reportMap: Record<string, string> = {
+      'full': 'Reporte: Unidad muy llena 👥',
+      'delay': 'Alerta: Retraso detectado ⏳',
+      'ac': 'Reporte: Problemas de climatización 🔥',
+      'safe': 'Vibe: Todo tranquilo por aquí ✅',
+      'share_live': 'Compartiendo ruta en vivo 📡'
+    };
+
+    const newPost: SocialPost = {
+      id: `p-${Date.now()}`,
+      userName: state.auth?.profile?.name || 'Explorador',
+      userAvatar: state.auth?.profile?.initials || 'U',
+      type: type === 'safe' || type === 'share_live' ? 'vibe' : 'alert',
+      content: reportMap[type] || 'Reporte de comunidad',
+      timestamp: Date.now(),
+      likes: 0,
+      lineContext: state.userLocation ? 'Cerca de ti' : 'General'
+    };
+
+    setState(prev => ({
+      ...prev,
+      socialFeed: [newPost, ...prev.socialFeed]
+    }));
+    setShowReportModal(false);
+    setToast({ message: "¡Gracias por contribuir!", type: 'success' });
+  };
+  // -----------------------
+
   const filteredRoutes = useMemo(() => {
     let routes = [...(state.searchResults || [])];
     if (routes.length === 0) return [];
@@ -609,7 +639,7 @@ const App: React.FC = () => {
         {state.isNavigating && state.currentPage !== 'navigation' && state.selectedRoute && (
           <FloatingPIP route={state.selectedRoute} onExpand={() => setState(p => ({ ...p, currentPage: 'navigation' }))} onClose={cancelRoute} />
         )}
-        {showReportModal && <ReportModal onClose={() => setShowReportModal(false)} onReport={() => setShowReportModal(false)} />}
+        {showReportModal && <ReportModal onClose={() => setShowReportModal(false)} onReport={handleReport} />}
       </main>
 
       {!state.userLocation && showLocationPrompt && state.currentPage !== 'onboarding' && (
