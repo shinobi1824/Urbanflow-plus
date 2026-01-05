@@ -69,6 +69,37 @@ const MapPreview: React.FC<MapPreviewProps> = ({
         (layer) => layer.type === 'symbol' && layer.layout?.['text-field']
       )?.id;
 
+      // 1. Añadir fuente de tráfico real
+      map.current.addSource('mapbox-traffic', {
+        type: 'vector',
+        url: 'mapbox://mapbox.mapbox-traffic-v1'
+      });
+
+      // 2. Añadir capa de visualización de tráfico (debajo de los edificios)
+      map.current.addLayer({
+        'id': 'traffic-flow',
+        'type': 'line',
+        'source': 'mapbox-traffic',
+        'source-layer': 'traffic',
+        'minzoom': 13, // Mostrar solo cuando el usuario hace zoom
+        'layout': {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        'paint': {
+          'line-width': 3,
+          'line-opacity': 0.6,
+          'line-color': [
+            'case',
+            ['==', ['get', 'congestion'], 'low'], '#10B981',      // Verde (Fluido)
+            ['==', ['get', 'congestion'], 'moderate'], '#F59E0B', // Amarillo (Moderado)
+            ['==', ['get', 'congestion'], 'heavy'], '#EF4444',    // Rojo (Pesado)
+            ['==', ['get', 'congestion'], 'severe'], '#7F1D1D',   // Rojo oscuro (Severo)
+            '#00000000' // Transparente si no hay datos
+          ]
+        }
+      }, labelLayerId); // Insertar antes de las etiquetas
+
       // Edificios 3D
       map.current.addLayer(
         {
@@ -128,6 +159,69 @@ const MapPreview: React.FC<MapPreviewProps> = ({
           'line-opacity': 1
         }
       });
+
+      // --- Interacción con Tráfico ---
+      
+      // Cambiar cursor al pasar sobre línea de tráfico
+      map.current.on('mouseenter', 'traffic-flow', () => {
+        if (map.current) map.current.getCanvas().style.cursor = 'pointer';
+      });
+      
+      map.current.on('mouseleave', 'traffic-flow', () => {
+        if (map.current) map.current.getCanvas().style.cursor = '';
+      });
+
+      // Click en segmento de tráfico
+      map.current.on('click', 'traffic-flow', (e) => {
+        if (!e.features || !e.features.length) return;
+        
+        const feature = e.features[0];
+        const congestion = feature.properties?.congestion || 'unknown';
+        
+        // Determinar texto y color
+        let status = 'Tráfico Fluido';
+        let color = '#10B981';
+        let delayText = 'Sin demoras';
+        let icon = '🟢';
+
+        switch (congestion) {
+          case 'moderate':
+            status = 'Tráfico Moderado';
+            color = '#F59E0B';
+            delayText = '+2-5 min demora';
+            icon = '🟡';
+            break;
+          case 'heavy':
+            status = 'Tráfico Pesado';
+            color = '#EF4444';
+            delayText = '+10-15 min demora';
+            icon = '🟠';
+            break;
+          case 'severe':
+            status = 'Congestión Severa';
+            color = '#7F1D1D';
+            delayText = '+25 min demora';
+            icon = '🔴';
+            break;
+        }
+
+        // Crear Popup HTML Personalizado
+        const popupContent = `
+          <div style="font-family: 'Inter', sans-serif; padding: 4px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span style="font-size: 16px;">${icon}</span>
+              <h3 style="margin: 0; font-size: 14px; font-weight: 800; color: ${theme === 'dark' ? '#fff' : '#111'}; text-transform: uppercase;">${status}</h3>
+            </div>
+            <p style="margin: 0; font-size: 12px; font-weight: 500; color: ${color}; opacity: 0.9;">${delayText}</p>
+            <p style="margin: 4px 0 0 0; font-size: 10px; opacity: 0.5; color: ${theme === 'dark' ? '#ccc' : '#666'};">Datos en tiempo real</p>
+          </div>
+        `;
+
+        new mapboxgl.Popup({ closeButton: false, maxWidth: '200px', className: theme === 'dark' ? 'dark-popup' : '' })
+          .setLngLat(e.lngLat)
+          .setHTML(popupContent)
+          .addTo(map.current!);
+      });
     });
 
     return () => map.current?.remove();
@@ -155,10 +249,13 @@ const MapPreview: React.FC<MapPreviewProps> = ({
         .addTo(map.current);
     }
 
-    // Si no hay ruta seleccionada, centrar en usuario la primera vez
+    // Si no hay ruta seleccionada, centrar en usuario la primera vez para mejor UX
     if (!selectedRoute) {
-       // Opcional: Centrar suavemente
-       // map.current.easeTo({ center: [userLocation.lng, userLocation.lat], zoom: 14 });
+       map.current.easeTo({ 
+         center: [userLocation.lng, userLocation.lat], 
+         zoom: 15,
+         duration: 2000 
+       });
     }
 
   }, [userLocation]);
@@ -233,6 +330,21 @@ const MapPreview: React.FC<MapPreviewProps> = ({
 
   return (
     <div className={`w-full h-full relative overflow-hidden transition-all duration-1000 ${offline ? 'grayscale saturate-50 brightness-90' : ''}`}>
+      <style>{`
+        .mapboxgl-popup-content {
+          border-radius: 16px;
+          padding: 12px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+        .dark-popup .mapboxgl-popup-content {
+          background-color: #1a1f26;
+          border: 1px solid rgba(255,255,255,0.1);
+          color: white;
+        }
+        .dark-popup .mapboxgl-popup-tip {
+          border-top-color: #1a1f26;
+        }
+      `}</style>
       <div ref={mapContainer} className="absolute inset-0 w-full h-full" />
 
       {/* Botón Centrar Ubicación Real */}

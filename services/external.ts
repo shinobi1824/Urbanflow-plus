@@ -51,5 +51,47 @@ export const ExternalServices = {
       lat: -23.5615 + (Math.random() * 0.02 - 0.01),
       lng: -46.6559 + (Math.random() * 0.02 - 0.01)
     };
+  },
+
+  // 4. Escritura Predictiva (Autocompletado Mock)
+  getPredictions: async (query: string): Promise<string[]> => {
+    if (!query || query.length < 2) return [];
+    
+    await new Promise(r => setTimeout(r, 200)); // Latencia simulada
+    
+    // Base de datos local mockeada
+    const mockDB = [
+      "Av. Paulista, São Paulo",
+      "Estación Central, Metro",
+      "Parque Ibirapuera, São Paulo",
+      "Aeropuerto Internacional",
+      "Centro Comercial",
+      "Museo de Arte",
+      "Calle Florida, Buenos Aires",
+      "Paseo de la Reforma, CDMX",
+      "Gran Vía, Madrid",
+      "Estadio Municipal"
+    ];
+
+    return mockDB.filter(item => item.toLowerCase().includes(query.toLowerCase())).slice(0, 4);
+  },
+
+  // 5. Pegado Inteligente (Extracción de direcciones)
+  extractAddressFromText: (text: string): string | null => {
+    if (!text || text.length > 500) return null; // Ignorar textos muy largos
+
+    // Heurística simple: Busca patrones comunes de dirección
+    // Ej: "Calle Falsa 123", "Av. Siempre Viva 742"
+    const addressRegex = /(?:calle|av\.|avenida|rua|street|place|plaza|paseo)\s+[\w\s\.]+\d+/i;
+    const match = text.match(addressRegex);
+    
+    if (match) {
+        return match[0];
+    }
+    
+    // Si es un texto corto que parece un lugar, devolverlo entero
+    if (text.length < 50 && text.length > 4) return text;
+
+    return null;
   }
 };

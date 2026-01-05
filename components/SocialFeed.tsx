@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SocialPost, Language } from '../types';
 import { I18N, Icons } from '../constants';
@@ -6,10 +5,21 @@ import { I18N, Icons } from '../constants';
 interface SocialFeedProps {
   posts: SocialPost[];
   language: Language;
+  onOpenReport?: () => void;
 }
 
-const SocialFeed: React.FC<SocialFeedProps> = ({ posts, language }) => {
+const SocialFeed: React.FC<SocialFeedProps> = ({ posts, language, onOpenReport }) => {
   const t = I18N[language];
+
+  const getTimeAgo = (timestamp: number) => {
+    const diff = Date.now() - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Ahora';
+    if (minutes < 60) return `Hace ${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Hace ${hours}h`;
+    return 'Hace 1d';
+  };
 
   return (
     <div className="flex flex-col h-full bg-gray-50 dark:bg-[#0B0F14] text-gray-900 dark:text-white overflow-y-auto hide-scrollbar pb-32">
@@ -19,10 +29,13 @@ const SocialFeed: React.FC<SocialFeedProps> = ({ posts, language }) => {
 
         {/* Action Bar */}
         <div className="flex gap-4 mb-10 overflow-x-auto hide-scrollbar -mx-8 px-8">
-          <button className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 rounded-[24px] font-black text-xs uppercase flex items-center gap-3 shadow-xl shadow-blue-600/20">
+          <button 
+            onClick={onOpenReport}
+            className="flex-shrink-0 bg-blue-600 text-white px-6 py-4 rounded-[24px] font-black text-xs uppercase flex items-center gap-3 shadow-xl shadow-blue-600/20 active:scale-95 transition-transform"
+          >
             <Icons.Message /> Nuevo Reporte
           </button>
-          <button className="flex-shrink-0 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 px-6 py-4 rounded-[24px] font-black text-xs uppercase flex items-center gap-3 text-gray-900 dark:text-white">
+          <button className="flex-shrink-0 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 px-6 py-4 rounded-[24px] font-black text-xs uppercase flex items-center gap-3 text-gray-900 dark:text-white active:scale-95 transition-transform">
             <Icons.Users /> Amigos
           </button>
         </div>
@@ -38,7 +51,7 @@ const SocialFeed: React.FC<SocialFeedProps> = ({ posts, language }) => {
                 <div className="flex-1">
                   <div className="flex justify-between items-center mb-1">
                     <h3 className="font-bold text-sm text-gray-900 dark:text-white/90">{post.userName}</h3>
-                    <span className="text-[10px] font-black opacity-30 uppercase text-gray-900 dark:text-white">hace 5m</span>
+                    <span className="text-[10px] font-black opacity-30 uppercase text-gray-900 dark:text-white">{getTimeAgo(post.timestamp)}</span>
                   </div>
                   
                   {post.lineContext && (

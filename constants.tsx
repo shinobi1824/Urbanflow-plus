@@ -70,7 +70,10 @@ export const I18N = {
     shareLive: "Share Live Trip",
     smartSchedule: "Smart Schedule",
     exitNow: "Leave Now",
-    heatmap: "Traffic Heatmap"
+    heatmap: "Traffic Heatmap",
+    smartPaste: "Smart Paste",
+    clipboardDetected: "Address detected in clipboard",
+    useAddress: "Use address"
   },
   es: {
     welcome: "¿A dónde vas?",
@@ -128,7 +131,10 @@ export const I18N = {
     shareLive: "Compartir Viaje",
     smartSchedule: "Horario Inteligente",
     exitNow: "Salir Ahora",
-    heatmap: "Mapa de Calor"
+    heatmap: "Mapa de Calor",
+    smartPaste: "Pegado Inteligente",
+    clipboardDetected: "Dirección detectada en portapapeles",
+    useAddress: "Usar dirección"
   },
   pt: {
     welcome: "Para onde você vai?",
@@ -186,7 +192,10 @@ export const I18N = {
     shareLive: "Compartilhar Viagem",
     smartSchedule: "Agenda Inteligente",
     exitNow: "Sair Agora",
-    heatmap: "Mapa de Calor"
+    heatmap: "Mapa de Calor",
+    smartPaste: "Colagem Inteligente",
+    clipboardDetected: "Endereço detectado na área de transferência",
+    useAddress: "Usar endereço"
   }
 };
 
@@ -218,5 +227,7 @@ export const Icons = {
   Apple: () => <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.39 5.98.6 7.23-.73 1.76-1.72 3.42-2.65 3.98zM12.03 7.25c-.08-2.69 2.25-4.87 4.73-5.25.35 3.17-3.11 5.56-4.73 5.25z"/></svg>,
   CloudOff: () => <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22.61 16.95A5 5 0 0018 10h-1.26a8 8 0 00-7.05-6M5 5a8 8 0 004 15h9a5 5 0 001.7-.3"/><line x1="1" y1="1" x2="23" y2="23"/></svg>,
   Sync: () => <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/></svg>,
-  Bolt: () => <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+  Bolt: () => <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
+  Search: () => <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  Clipboard: () => <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /><rect x="8" y="2" width="8" height="4" rx="1" ry="1" /></svg>
 };

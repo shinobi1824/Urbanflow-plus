@@ -58,10 +58,23 @@ export const OTPService = {
         })
       });
 
-      const json = await response.json();
+      if (!response.ok) {
+         console.warn(`OTP API HTTP Error: ${response.status}`);
+         return [];
+      }
+
+      const text = await response.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (e) {
+        console.warn("OTP API Response was not JSON:", text.substring(0, 100));
+        return [];
+      }
       
       if (json.errors) {
-        console.error("OTP API Errors:", json.errors);
+        // Use console.log for array/objects to ensure browser console expands them
+        console.warn("OTP API Errors:", json.errors);
         return [];
       }
 
@@ -77,14 +90,16 @@ export const OTPService = {
 
 // Mapper: Convierte la respuesta compleja de Transmodel a nuestra UI simple
 function mapOtpPatternToRouteResult(pattern: any, index: number): RouteResult {
-  const startTime = new Date(pattern.startTime);
-  const endTime = new Date(pattern.endTime);
-  const durationMinutes = Math.round(pattern.duration / 60);
+  if (!pattern) return {} as RouteResult;
+  
+  const startTime = new Date(pattern.startTime || Date.now());
+  const endTime = new Date(pattern.endTime || Date.now());
+  const durationMinutes = Math.round((pattern.duration || 0) / 60);
 
   let totalCost = 0;
   let transfers = 0;
 
-  const steps: RouteStep[] = pattern.legs.map((leg: any) => {
+  const steps: RouteStep[] = (pattern.legs || []).map((leg: any) => {
     const mode = mapOtpMode(leg.mode);
     if (mode !== TransportMode.WALK) {
       totalCost += 1.50; // Costo base simulado por pierna de transporte
@@ -94,9 +109,9 @@ function mapOtpPatternToRouteResult(pattern: any, index: number): RouteResult {
     return {
       mode: mode,
       instruction: mode === TransportMode.WALK 
-        ? `Caminar hacia ${leg.to.name}` 
-        : `Tomar ${leg.line?.publicCode || leg.mode} hacia ${leg.to.name}`,
-      durationMinutes: Math.round(leg.duration / 60),
+        ? `Caminar hacia ${leg.to?.name || 'el destino'}` 
+        : `Tomar ${leg.line?.publicCode || leg.mode} hacia ${leg.to?.name || 'la parada'}`,
+      durationMinutes: Math.round((leg.duration || 0) / 60),
       lineName: leg.line?.publicCode || undefined,
       color: getModeColor(mode)
     };
@@ -106,7 +121,7 @@ function mapOtpPatternToRouteResult(pattern: any, index: number): RouteResult {
     id: `otp-real-${index}-${Date.now()}`,
     totalTime: durationMinutes,
     cost: totalCost || 0, // Si es todo caminar, gratis
-    walkingDistance: Math.round(pattern.walkDistance),
+    walkingDistance: Math.round(pattern.walkDistance || 0),
     transfers: Math.max(0, transfers - 1), // Restamos 1 porque el primer abordaje no es transbordo
     co2Savings: 0, // Se calculará con AI o lógica local
     steps: steps,
