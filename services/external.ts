@@ -59,10 +59,27 @@ export const ExternalServices = {
     
     await new Promise(r => setTimeout(r, 200)); // Latencia simulada
     
-    // Base de datos local mockeada
+    // Base de datos local mockeada (Curitiba + referencias URBS/Metrocard)
     const mockDB = [
+      "Rua XV de Novembro, Curitiba",
+      "Rua Alberto Folloni, Curitiba",
+      "Rua Heitor Stockler de França, Curitiba",
+      "Av. Sete de Setembro, Curitiba",
+      "Av. República Argentina, Curitiba",
+      "Av. Marechal Floriano Peixoto, Curitiba",
+      "Av. Winston Churchill, Curitiba",
+      "Terminal Guadalupe (URBS)",
+      "Terminal Campina do Siqueira (URBS)",
+      "Terminal Cabral (URBS)",
+      "Terminal Boqueirão (URBS)",
+      "Terminal Pinheirinho (URBS)",
+      "Estação-Tubo Praça Rui Barbosa (URBS)",
+      "Estação-Tubo Carlos Gomes (URBS)",
+      "Linha Inter 2 (URBS)",
+      "Linha Cabral/Portão (URBS)",
+      "Cartão Metrocard - recarga",
+      "Cartão Metrocard - consulta de saldo",
       "Av. Paulista, São Paulo",
-      "Estación Central, Metro",
       "Parque Ibirapuera, São Paulo",
       "Aeropuerto Internacional",
       "Centro Comercial",
