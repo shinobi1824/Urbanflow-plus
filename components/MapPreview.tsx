@@ -4,7 +4,7 @@ import mapboxgl from 'mapbox-gl';
 import { VehiclePosition, TransportMode, RouteResult, GeoArea, Coordinates } from '../types';
 
 // Token público de Mapbox
-const MAPBOX_TOKEN = 'pk.eyJ1Ijoic2hpbm9iaTE4MjQiLCJhIjoiY21qbjB4dnh2MzA5MjNjb3RvbWk0cTU1aCJ9.uU0pDBBbfgsEkCss3j8Ckg';
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 
 interface MapPreviewProps {
   offline?: boolean;
@@ -44,6 +44,10 @@ const MapPreview: React.FC<MapPreviewProps> = ({
   useEffect(() => {
     if (!mapContainer.current) return;
     
+    if (!MAPBOX_TOKEN) {
+      console.warn("[UrbanFlow+] Missing VITE_MAPBOX_TOKEN for Mapbox.");
+      return;
+    }
     mapboxgl.accessToken = MAPBOX_TOKEN;
 
     const style = theme === 'light' ? 'mapbox://styles/mapbox/light-v11' : 'mapbox://styles/mapbox/dark-v11';

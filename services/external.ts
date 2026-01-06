@@ -2,7 +2,7 @@
 import { TransportMode } from "../types";
 
 // API Key de OpenWeatherMap
-const OPENWEATHER_API_KEY = 'ad0687f07bb2ab8e0f917ab95b05922b';
+const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || '';
 
 // Esta es la central de integraciones de UrbanFlow+
 export const ExternalServices = {

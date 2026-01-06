@@ -7,7 +7,11 @@ import { ExternalServices } from "./external";
 let ai: GoogleGenAI;
 try {
   // Use a fallback to prevent constructor error, though API calls will fail if invalid
-  ai = new GoogleGenAI({ apiKey: process.env.API_KEY || 'MISSING_KEY' });
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || 'MISSING_KEY';
+  if (apiKey === 'MISSING_KEY') {
+    console.warn("[UrbanFlow+] Missing VITE_GEMINI_API_KEY for Gemini.");
+  }
+  ai = new GoogleGenAI({ apiKey });
 } catch (e) {
   console.error("Critical: Failed to initialize GoogleGenAI", e);
   // Mock minimal interface to prevent crash usage

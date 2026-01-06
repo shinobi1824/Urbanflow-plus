@@ -2,7 +2,7 @@
 import { Agency, VehiclePosition, TransportMode, LiveArrival } from "../types";
 
 // API Key de Transitland para datos GTFS-RT reales
-const TRANSITLAND_API_KEY = 'GE4YyL6P4EvdtSmn4bK4oyUZezQMZvEC';
+const TRANSITLAND_API_KEY = import.meta.env.VITE_TRANSITLAND_API_KEY || '';
 
 // Base de datos de agencias expandida para Latinoamérica (Fallback robusto)
 const GLOBAL_AGENCIES_DB: Agency[] = [
