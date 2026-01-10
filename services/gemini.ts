@@ -84,11 +84,14 @@ export async function generateSmartRoutes(
   isPremiumUser: boolean = false
 ): Promise<RouteResult[]> {
   try {
+    if (!userLocation) {
+      throw new Error("Ubicación GPS requerida para rutas reales.");
+    }
     // 1. Obtener coordenadas reales del destino
     const destCoords = await ExternalServices.searchAddress(destination);
     
-    // Usar ubicación del usuario o un default si no hay GPS (Fallback Curitiba)
-    const originCoords = userLocation || { lat: -25.4284, lng: -49.2733 };
+    // Usar ubicación del usuario (GPS)
+    const originCoords = userLocation;
 
     // 2. Intentar obtener rutas reales desde OpenTripPlanner (Motor Transmodel)
     let realRoutes: RouteResult[] = [];
@@ -167,6 +170,6 @@ export async function generateSmartRoutes(
 
   } catch (error) {
     console.error("Generative Route Failed", error);
-    return getFallbackRoutes();
+    throw error;
   }
 }

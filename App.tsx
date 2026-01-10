@@ -289,12 +289,16 @@ const App: React.FC = () => {
 
   const handleSearch = async (query: string) => {
     if (!query.trim()) return;
+    if (!state.userLocation) {
+      setToast({ message: "Activa el GPS para obtener rutas reales.", type: 'info' });
+      return;
+    }
     setShowSuggestions(false); // Hide suggestions
     setState(prev => ({ ...prev, isLoading: true, destination: query }));
     
     try {
       const parsed = await parseNaturalLanguageQuery(query);
-      const weather = await ExternalServices.getWeatherUpdate(state.userLocation?.lat || 0, state.userLocation?.lng || 0);
+      const weather = await ExternalServices.getWeatherUpdate(state.userLocation.lat, state.userLocation.lng);
       let routes: RouteResult[] = [];
 
       routes = await generateSmartRoutes(
