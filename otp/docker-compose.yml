@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+  otp:
+    image: opentripplanner/opentripplanner:2.5.0
+    container_name: urbanflow-otp
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./otp-data:/data
+    command:
+      - "--build"
+      - "/data"
+      - "--save"
+      - "/data"
+      - "--serve"
+      - "--port"
+      - "8080"

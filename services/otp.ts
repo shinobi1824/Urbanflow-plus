@@ -1,10 +1,9 @@
 
 import { RouteResult, TransportMode, RouteStep } from "../types";
 
-// URL del Endpoint GraphQL de OTP. 
-// Para producción, cambiar a tu propia instancia (ej: http://localhost:8080/otp/routers/default/index/graphql)
-// Como demo, usamos Entur (Noruega) que es público y usa Transmodel, pero en una app real usarías tu servidor.
-const OTP_ENDPOINT = 'https://api.entur.io/journey-planner/v3/graphql';
+// URL del Endpoint GraphQL de OTP.
+// Para producción, usar tu propia instancia (ej: http://localhost:8080/otp/routers/default/index/graphql)
+const OTP_ENDPOINT = import.meta.env.VITE_OTP_ENDPOINT || '';
 
 const TRANSMODEL_QUERY = `
   query Trip($fromLat: Float!, $fromLon: Float!, $toLat: Float!, $toLon: Float!) {
@@ -40,6 +39,9 @@ const TRANSMODEL_QUERY = `
 
 export const OTPService = {
   async planTrip(from: { lat: number; lng: number }, to: { lat: number; lng: number }): Promise<RouteResult[]> {
+    if (!OTP_ENDPOINT) {
+      throw new Error("Missing VITE_OTP_ENDPOINT for real routing.");
+    }
     try {
       const response = await fetch(OTP_ENDPOINT, {
         method: 'POST',
