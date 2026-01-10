@@ -95,41 +95,21 @@ export async function generateSmartRoutes(
     try {
         realRoutes = await OTPService.planTrip(originCoords, destCoords);
     } catch (e) {
-        console.log("OTP Skipped or Failed");
+        console.error("OTP Failed", e);
     }
     
-    // 3. Si OTP falla, usar fallback puro de IA
-    const useGenerativeFallback = realRoutes.length === 0;
+    if (realRoutes.length === 0) {
+      throw new Error("No se encontraron rutas reales.");
+    }
 
     let prompt = "";
 
-    if (!useGenerativeFallback) {
-      prompt = `
-        You are an Urban Mobility AI Enhancer.
-        I have these REAL technical routes: ${JSON.stringify(realRoutes)}.
-        Current Weather: ${weather.condition}, ${weather.temp}°C.
-        ENHANCE these routes. Add reasoning, safety scores, and compare with a estimated Uber/Ride price.
-      `;
-    } else {
-      // PROMPT MEJORADO PARA ESTILO MOOVIT
-      prompt = `
-        Act as a Transit Planner like Moovit. 
-        Origin Lat/Lng: ${originCoords.lat}, ${originCoords.lng}.
-        Destination: "${destination}".
-        
-        Generate 4 DISTINCT route options with realistic PRICING (currency: local unit $):
-        1. Best Public Transit (Metro + Walk).
-        2. Cheapest Option (Bus only).
-        3. Multi-modal (Bus + Metro).
-        4. Ride-Hailing (Uber/Cab) - fast but expensive.
-        
-        Use REAL LINE NAMES (e.g. "L4", "Bus 201", "Red Line").
-        
-        Context: Weather is ${weather.condition}, ${weather.temp}°C.
-        
-        Output JSON matching RouteResult schema.
-      `;
-    }
+    prompt = `
+      You are an Urban Mobility AI Enhancer.
+      I have these REAL technical routes: ${JSON.stringify(realRoutes)}.
+      Current Weather: ${weather.condition}, ${weather.temp}°C.
+      ENHANCE these routes. Add reasoning, safety scores, and compare with a estimated Uber/Ride price.
+    `;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
