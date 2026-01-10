@@ -59,20 +59,20 @@ export function getFallbackRoutes(): RouteResult[] {
   return [
     {
       id: 'fallback-1',
-      totalTime: 45,
-      cost: 4.50,
-      walkingDistance: 500,
-      transfers: 1,
-      co2Savings: 120,
+      totalTime: 35,
+      cost: 6.00,
+      walkingDistance: 650,
+      transfers: 0,
+      co2Savings: 180,
       steps: [
-        { mode: TransportMode.WALK, instruction: 'Caminar a estación', durationMinutes: 10 },
-        { mode: TransportMode.METRO, instruction: 'Tomar Línea Azul', durationMinutes: 30, lineName: 'L1', color: '#3B82F6' },
-        { mode: TransportMode.WALK, instruction: 'Caminar a destino', durationMinutes: 5 }
+        { mode: TransportMode.WALK, instruction: 'Caminar al ponto URBS', durationMinutes: 8 },
+        { mode: TransportMode.BUS, instruction: 'Tomar Linha Inter 2', durationMinutes: 22, lineName: 'Inter 2', color: '#10B981' },
+        { mode: TransportMode.WALK, instruction: 'Caminar al destino', durationMinutes: 5 }
       ],
-      aiReasoning: "Ruta offline/fallback generada localmente.",
+      aiReasoning: "Ruta offline/fallback local basada en corredores URBS.",
       isAccessible: true,
       startTime: "Ahora",
-      endTime: "45 min"
+      endTime: "35 min"
     }
   ];
 }
@@ -87,8 +87,8 @@ export async function generateSmartRoutes(
     // 1. Obtener coordenadas reales del destino
     const destCoords = await ExternalServices.searchAddress(destination);
     
-    // Usar ubicación del usuario o un default si no hay GPS (Fallback Sao Paulo)
-    const originCoords = userLocation || { lat: -23.5615, lng: -46.6559 }; 
+    // Usar ubicación del usuario o un default si no hay GPS (Fallback Curitiba)
+    const originCoords = userLocation || { lat: -25.4284, lng: -49.2733 };
 
     // 2. Intentar obtener rutas reales desde OpenTripPlanner (Motor Transmodel)
     let realRoutes: RouteResult[] = [];

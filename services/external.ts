@@ -45,11 +45,11 @@ export const ExternalServices = {
   searchAddress: async (query: string) => {
     // Aquí iría la integración real con Mapbox Geocoding o Google Places
     // Para la demo, devolvemos coordenadas fijas pero con una pequeña variación aleatoria
-    // para simular destinos distintos cerca de Av. Paulista.
+    // para simular destinos distintos cerca del centro de Curitiba.
     return {
       name: query,
-      lat: -23.5615 + (Math.random() * 0.02 - 0.01),
-      lng: -46.6559 + (Math.random() * 0.02 - 0.01)
+      lat: -25.4284 + (Math.random() * 0.02 - 0.01),
+      lng: -49.2733 + (Math.random() * 0.02 - 0.01)
     };
   },
 
@@ -62,6 +62,7 @@ export const ExternalServices = {
     // Base de datos local mockeada (Curitiba + referencias URBS/Metrocard)
     const mockDB = [
       "Rua XV de Novembro, Curitiba",
+      "Rua Robert Redzinski, Curitiba",
       "Rua Alberto Folloni, Curitiba",
       "Rua Heitor Stockler de França, Curitiba",
       "Av. Sete de Setembro, Curitiba",

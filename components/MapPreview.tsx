@@ -18,8 +18,8 @@ interface MapPreviewProps {
   theme?: 'light' | 'dark';
 }
 
-// Coordenadas base (São Paulo - Av Paulista) por defecto si no hay GPS
-const DEFAULT_CENTER: [number, number] = [-46.6559, -23.5615]; 
+// Coordenadas base (Curitiba - Centro) por defecto si no hay GPS
+const DEFAULT_CENTER: [number, number] = [-49.2733, -25.4284];
 
 const MapPreview: React.FC<MapPreviewProps> = ({ 
   offline, 
