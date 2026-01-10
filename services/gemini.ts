@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { RouteResult, TransportMode, Coordinates } from "../types";
-import { OTPService } from "./otp";
+import { TransitlandRoutingService } from "./transit";
 import { ExternalServices } from "./external";
 
 // Inicializamos el cliente de manera segura para evitar crashes si la API Key falla
@@ -93,12 +93,12 @@ export async function generateSmartRoutes(
     // Usar ubicación del usuario (GPS)
     const originCoords = userLocation;
 
-    // 2. Intentar obtener rutas reales desde OpenTripPlanner (Motor Transmodel)
+    // 2. Intentar obtener rutas reales desde Transitland Routing
     let realRoutes: RouteResult[] = [];
     try {
-        realRoutes = await OTPService.planTrip(originCoords, destCoords);
+        realRoutes = await TransitlandRoutingService.planTrip(originCoords, destCoords);
     } catch (e) {
-        console.error("OTP Failed", e);
+        console.error("Transitland Routing Failed", e);
     }
     
     if (realRoutes.length === 0) {
