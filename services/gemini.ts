@@ -1,13 +1,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { RouteResult, TransportMode, Coordinates } from "../types";
-import { OTPService } from "./otp";
+import { TransitlandRoutingService } from "./transit";
 import { ExternalServices } from "./external";
 
 // Inicializamos el cliente de manera segura para evitar crashes si la API Key falla
 let ai: GoogleGenAI;
 try {
   // Use a fallback to prevent constructor error, though API calls will fail if invalid
-  ai = new GoogleGenAI({ apiKey: process.env.API_KEY || 'MISSING_KEY' });
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || 'MISSING_KEY';
+  if (apiKey === 'MISSING_KEY') {
+    console.warn("[UrbanFlow+] Missing VITE_GEMINI_API_KEY for Gemini.");
+  }
+  ai = new GoogleGenAI({ apiKey });
 } catch (e) {
   console.error("Critical: Failed to initialize GoogleGenAI", e);
   // Mock minimal interface to prevent crash usage
@@ -55,20 +59,20 @@ export function getFallbackRoutes(): RouteResult[] {
   return [
     {
       id: 'fallback-1',
-      totalTime: 45,
-      cost: 4.50,
-      walkingDistance: 500,
-      transfers: 1,
-      co2Savings: 120,
+      totalTime: 35,
+      cost: 6.00,
+      walkingDistance: 650,
+      transfers: 0,
+      co2Savings: 180,
       steps: [
-        { mode: TransportMode.WALK, instruction: 'Caminar a estación', durationMinutes: 10 },
-        { mode: TransportMode.METRO, instruction: 'Tomar Línea Azul', durationMinutes: 30, lineName: 'L1', color: '#3B82F6' },
-        { mode: TransportMode.WALK, instruction: 'Caminar a destino', durationMinutes: 5 }
+        { mode: TransportMode.WALK, instruction: 'Caminar al ponto URBS', durationMinutes: 8 },
+        { mode: TransportMode.BUS, instruction: 'Tomar Linha Inter 2', durationMinutes: 22, lineName: 'Inter 2', color: '#10B981' },
+        { mode: TransportMode.WALK, instruction: 'Caminar al destino', durationMinutes: 5 }
       ],
-      aiReasoning: "Ruta offline/fallback generada localmente.",
+      aiReasoning: "Ruta offline/fallback local basada en corredores URBS.",
       isAccessible: true,
       startTime: "Ahora",
-      endTime: "45 min"
+      endTime: "35 min"
     }
   ];
 }
@@ -80,52 +84,35 @@ export async function generateSmartRoutes(
   isPremiumUser: boolean = false
 ): Promise<RouteResult[]> {
   try {
+    if (!userLocation) {
+      throw new Error("Ubicación GPS requerida para rutas reales.");
+    }
     // 1. Obtener coordenadas reales del destino
     const destCoords = await ExternalServices.searchAddress(destination);
     
-    // Usar ubicación del usuario o un default si no hay GPS (Fallback Sao Paulo)
-    const originCoords = userLocation || { lat: -23.5615, lng: -46.6559 }; 
+    // Usar ubicación del usuario (GPS)
+    const originCoords = userLocation;
 
-    // 2. Intentar obtener rutas reales desde OpenTripPlanner (Motor Transmodel)
+    // 2. Intentar obtener rutas reales desde Transitland Routing
     let realRoutes: RouteResult[] = [];
     try {
-        realRoutes = await OTPService.planTrip(originCoords, destCoords);
+        realRoutes = await TransitlandRoutingService.planTrip(originCoords, destCoords);
     } catch (e) {
-        console.log("OTP Skipped or Failed");
+        console.error("Transitland Routing Failed", e);
     }
     
-    // 3. Si OTP falla, usar fallback puro de IA
-    const useGenerativeFallback = realRoutes.length === 0;
+    if (realRoutes.length === 0) {
+      throw new Error("No se encontraron rutas reales.");
+    }
 
     let prompt = "";
 
-    if (!useGenerativeFallback) {
-      prompt = `
-        You are an Urban Mobility AI Enhancer.
-        I have these REAL technical routes: ${JSON.stringify(realRoutes)}.
-        Current Weather: ${weather.condition}, ${weather.temp}°C.
-        ENHANCE these routes. Add reasoning, safety scores, and compare with a estimated Uber/Ride price.
-      `;
-    } else {
-      // PROMPT MEJORADO PARA ESTILO MOOVIT
-      prompt = `
-        Act as a Transit Planner like Moovit. 
-        Origin Lat/Lng: ${originCoords.lat}, ${originCoords.lng}.
-        Destination: "${destination}".
-        
-        Generate 4 DISTINCT route options with realistic PRICING (currency: local unit $):
-        1. Best Public Transit (Metro + Walk).
-        2. Cheapest Option (Bus only).
-        3. Multi-modal (Bus + Metro).
-        4. Ride-Hailing (Uber/Cab) - fast but expensive.
-        
-        Use REAL LINE NAMES (e.g. "L4", "Bus 201", "Red Line").
-        
-        Context: Weather is ${weather.condition}, ${weather.temp}°C.
-        
-        Output JSON matching RouteResult schema.
-      `;
-    }
+    prompt = `
+      You are an Urban Mobility AI Enhancer.
+      I have these REAL technical routes: ${JSON.stringify(realRoutes)}.
+      Current Weather: ${weather.condition}, ${weather.temp}°C.
+      ENHANCE these routes. Add reasoning, safety scores, and compare with a estimated Uber/Ride price.
+    `;
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -183,6 +170,6 @@ export async function generateSmartRoutes(
 
   } catch (error) {
     console.error("Generative Route Failed", error);
-    return getFallbackRoutes();
+    throw error;
   }
 }

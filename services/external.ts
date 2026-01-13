@@ -2,7 +2,7 @@
 import { TransportMode } from "../types";
 
 // API Key de OpenWeatherMap
-const OPENWEATHER_API_KEY = 'ad0687f07bb2ab8e0f917ab95b05922b';
+const OPENWEATHER_API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY || '';
 
 // Esta es la central de integraciones de UrbanFlow+
 export const ExternalServices = {
@@ -25,55 +25,68 @@ export const ExternalServices = {
 
   // 2. Integración con Clima
   getWeatherUpdate: async (lat: number, lng: number) => {
-    // CONFIGURACIÓN DE PRODUCCIÓN:
-    // Token inyectado. Descomentar para activar peticiones HTTP reales:
-    // const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric`);
-    // const data = await res.json();
-    
-    // console.log(`[UrbanFlow+] Weather API Connected: ${OPENWEATHER_API_KEY.substring(0, 6)}...`);
+    if (!OPENWEATHER_API_KEY) {
+      throw new Error("Missing VITE_OPENWEATHER_API_KEY for weather updates.");
+    }
 
-    // Retorno simulado (Mock) para consistencia en demo
+    const res = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OPENWEATHER_API_KEY}&units=metric`
+    );
+    if (!res.ok) {
+      throw new Error(`OpenWeather error: ${res.status}`);
+    }
+    const data = await res.json();
+
     return {
-      temp: 24,
-      condition: 'Clear',
-      humidity: 0.6,
-      willRainInNextHour: false
+      temp: Math.round(data.main?.temp ?? 0),
+      condition: data.weather?.[0]?.main || 'Unknown',
+      humidity: (data.main?.humidity ?? 0) / 100,
+      willRainInNextHour: Boolean(data.rain)
     };
   },
 
   // 3. Geocoding (Convertir texto a coordenadas reales)
   searchAddress: async (query: string) => {
-    // Aquí iría la integración real con Mapbox Geocoding o Google Places
-    // Para la demo, devolvemos coordenadas fijas pero con una pequeña variación aleatoria
-    // para simular destinos distintos cerca de Av. Paulista.
+    const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+    if (!mapboxToken) {
+      throw new Error("Missing VITE_MAPBOX_TOKEN for geocoding.");
+    }
+
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&limit=1&language=es`
+    );
+    if (!res.ok) {
+      throw new Error(`Mapbox geocoding error: ${res.status}`);
+    }
+    const data = await res.json();
+    const feature = data.features?.[0];
+    if (!feature) {
+      throw new Error("No geocoding results found.");
+    }
+
     return {
-      name: query,
-      lat: -23.5615 + (Math.random() * 0.02 - 0.01),
-      lng: -46.6559 + (Math.random() * 0.02 - 0.01)
+      name: feature.place_name || query,
+      lat: feature.center?.[1],
+      lng: feature.center?.[0]
     };
   },
 
   // 4. Escritura Predictiva (Autocompletado Mock)
   getPredictions: async (query: string): Promise<string[]> => {
     if (!query || query.length < 2) return [];
-    
-    await new Promise(r => setTimeout(r, 200)); // Latencia simulada
-    
-    // Base de datos local mockeada
-    const mockDB = [
-      "Av. Paulista, São Paulo",
-      "Estación Central, Metro",
-      "Parque Ibirapuera, São Paulo",
-      "Aeropuerto Internacional",
-      "Centro Comercial",
-      "Museo de Arte",
-      "Calle Florida, Buenos Aires",
-      "Paseo de la Reforma, CDMX",
-      "Gran Vía, Madrid",
-      "Estadio Municipal"
-    ];
+    const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+    if (!mapboxToken) {
+      throw new Error("Missing VITE_MAPBOX_TOKEN for autocomplete.");
+    }
 
-    return mockDB.filter(item => item.toLowerCase().includes(query.toLowerCase())).slice(0, 4);
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&autocomplete=true&limit=5&language=es`
+    );
+    if (!res.ok) {
+      throw new Error(`Mapbox autocomplete error: ${res.status}`);
+    }
+    const data = await res.json();
+    return (data.features || []).map((feature: any) => feature.place_name).filter(Boolean);
   },
 
   // 5. Pegado Inteligente (Extracción de direcciones)
